@@ -71,7 +71,7 @@ function isComposioUnavailableError(error: unknown): boolean {
 
 function getComposioHeaders(method: string | undefined, existingHeaders: HeadersInit | undefined): HeadersInit {
     if (!COMPOSIO_API_KEY) {
-        throw new Error('Composio is not configured for this workspace.');
+        return existingHeaders ?? {};
     }
 
     return {
@@ -168,6 +168,20 @@ export async function listToolkits(cursor: string | null = null): Promise<z.infe
 }
 
 export async function getToolkit(toolkitSlug: string): Promise<z.infer<typeof ZGetToolkitResponse>> {
+    if (!COMPOSIO_API_KEY) {
+        return ZGetToolkitResponse.parse({
+            slug: toolkitSlug,
+            name: toolkitSlug,
+            composio_managed_auth_schemes: [],
+            meta: {
+                description: "",
+                logo: "",
+                tools_count: 0,
+                triggers_count: 0,
+            },
+            auth_config_details: [],
+        });
+    }
     const url = new URL(`${BASE_URL}/toolkits/${toolkitSlug}`);
     return composioApiCall(ZGetToolkitResponse, url.toString());
 }
