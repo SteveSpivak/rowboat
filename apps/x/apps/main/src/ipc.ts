@@ -27,6 +27,7 @@ import { listOnboardingModels } from '@x/core/dist/models/models-dev.js';
 import { shouldUseGatewayProvider, testModelConnection } from '@x/core/dist/models/models.js';
 import { isSignedIn } from '@x/core/dist/account/account.js';
 import { listGatewayModels } from '@x/core/dist/models/gateway.js';
+import { listLocalProviders } from '@x/core/dist/models/local-models.js';
 import type { IModelConfigRepo } from '@x/core/dist/models/repo.js';
 import type { IOAuthRepo } from '@x/core/dist/auth/repo.js';
 import { IGranolaConfigRepo } from '@x/core/dist/knowledge/granola/repo.js';
@@ -448,10 +449,36 @@ export function setupIpcHandlers() {
     'models:list': async () => {
       const repo = container.resolve<IModelConfigRepo>('modelConfigRepo');
       const config = await repo.getConfig();
-      if (shouldUseGatewayProvider(config.provider, await isSignedIn())) {
-        return await listGatewayModels();
+      const providersConfig = (config as { providers?: Record<string, { baseURL?: string }> }).providers ?? {};
+      const bridgeBaseUrl = providersConfig['codex-cli']?.baseURL
+        ?? providersConfig['claude-cli']?.baseURL
+        ?? providersConfig['gemini-cli']?.baseURL
+        ?? config.provider.baseURL
+        ?? "http://127.0.0.1:8766/v1";
+      const ollamaBaseUrl = providersConfig.ollama?.baseURL
+        ?? "http://127.0.0.1:11434";
+
+      const localProviders = await listLocalProviders({
+        bridgeBaseUrl,
+        ollamaBaseUrl,
+      });
+
+      try {
+        if (shouldUseGatewayProvider(config.provider, await isSignedIn())) {
+          const gateway = await listGatewayModels();
+          return {
+            ...gateway,
+            providers: [...gateway.providers, ...localProviders],
+          };
+        }
+        const onboarding = await listOnboardingModels();
+        return {
+          ...onboarding,
+          providers: [...onboarding.providers, ...localProviders],
+        };
+      } catch {
+        return { providers: localProviders };
       }
-      return await listOnboardingModels();
     },
     'models:test': async (_event, args) => {
       return await testModelConnection(args.provider, args.model);

@@ -146,7 +146,10 @@ export async function testModelConnection(
         });
         return { success: true };
     } catch (error) {
-        const message = error instanceof Error ? error.message : "Connection test failed";
+        const rawMessage = error instanceof Error ? error.message : "Connection test failed";
+        const message = rawMessage.includes("ECONNREFUSED") && rawMessage.includes("127.0.0.1:8766")
+            ? "Local CLI bridge is not running at http://127.0.0.1:8766. Start the CLI bridge and try again."
+            : rawMessage;
         return { success: false, error: message };
     } finally {
         clearTimeout(timeout);

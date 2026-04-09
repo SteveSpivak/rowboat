@@ -657,6 +657,16 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                   )}
                 </div>
               ))}
+              {isCliBridgeProvider(provider) && modelsForProvider.length === 0 && (
+                <div className="text-xs text-muted-foreground">
+                  Start the CLI bridge at http://127.0.0.1:8766 to load models, or type a model ID manually.
+                </div>
+              )}
+              {provider === "ollama" && modelsForProvider.length === 0 && (
+                <div className="text-xs text-muted-foreground">
+                  No local Ollama models found. Start Ollama or pull a model, then reopen settings.
+                </div>
+              )}
               <button
                 onClick={() => addModel(provider)}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
