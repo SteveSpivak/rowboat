@@ -454,7 +454,7 @@ export function setupIpcHandlers() {
         ?? providersConfig['claude-cli']?.baseURL
         ?? providersConfig['gemini-cli']?.baseURL
         ?? config.provider.baseURL
-        ?? "http://127.0.0.1:8766/v1";
+        ?? "http://127.0.0.1:8765/v1";
       const ollamaBaseUrl = providersConfig.ollama?.baseURL
         ?? "http://127.0.0.1:11434";
 

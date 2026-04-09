@@ -14,7 +14,7 @@ import { getGatewayProvider } from "./gateway.js";
 export const Provider = LlmProvider;
 export const ModelConfig = LlmModelConfig;
 
-const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8766/v1";
+const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8765/v1";
 const CLI_PROVIDER_HEADERS: Record<"codex-cli" | "gemini-cli" | "claude-cli", Record<string, string>> = {
     "codex-cli": { "x-cli-backend": "codex" },
     "gemini-cli": { "x-cli-backend": "gemini" },
@@ -147,8 +147,8 @@ export async function testModelConnection(
         return { success: true };
     } catch (error) {
         const rawMessage = error instanceof Error ? error.message : "Connection test failed";
-        const message = rawMessage.includes("ECONNREFUSED") && rawMessage.includes("127.0.0.1:8766")
-            ? "Local CLI bridge is not running at http://127.0.0.1:8766. Start the CLI bridge and try again."
+        const message = rawMessage.includes("ECONNREFUSED") && rawMessage.includes("127.0.0.1:8765")
+            ? "Local CLI bridge is not running at http://127.0.0.1:8765. Start the CLI bridge and try again."
             : rawMessage;
         return { success: false, error: message };
     } finally {

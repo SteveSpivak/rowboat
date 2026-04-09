@@ -204,9 +204,9 @@ const preferredDefaults: Partial<Record<LlmProviderFlavor, string>> = {
 const defaultBaseURLs: Partial<Record<LlmProviderFlavor, string>> = {
   ollama: "http://localhost:11434",
   "openai-compatible": "http://localhost:1234/v1",
-  "codex-cli": "http://127.0.0.1:8766/v1",
-  "gemini-cli": "http://127.0.0.1:8766/v1",
-  "claude-cli": "http://127.0.0.1:8766/v1",
+  "codex-cli": "http://127.0.0.1:8765/v1",
+  "gemini-cli": "http://127.0.0.1:8765/v1",
+  "claude-cli": "http://127.0.0.1:8765/v1",
 }
 
 const CLI_PROVIDER_HEADERS: Record<CliBridgeProviderFlavor, Record<string, string>> = {
@@ -229,9 +229,9 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     aigateway: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
     ollama: { apiKey: "", baseURL: "http://localhost:11434", models: [""], knowledgeGraphModel: "" },
     "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", models: [""], knowledgeGraphModel: "" },
-    "codex-cli": { apiKey: "", baseURL: "http://127.0.0.1:8766/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["codex-cli"] },
-    "gemini-cli": { apiKey: "", baseURL: "http://127.0.0.1:8766/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["gemini-cli"] },
-    "claude-cli": { apiKey: "", baseURL: "http://127.0.0.1:8766/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["claude-cli"] },
+    "codex-cli": { apiKey: "", baseURL: "http://127.0.0.1:8765/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["codex-cli"] },
+    "gemini-cli": { apiKey: "", baseURL: "http://127.0.0.1:8765/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["gemini-cli"] },
+    "claude-cli": { apiKey: "", baseURL: "http://127.0.0.1:8765/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["claude-cli"] },
   })
   const [modelsCatalog, setModelsCatalog] = useState<Record<string, LlmModelOption[]>>({})
   const [modelsLoading, setModelsLoading] = useState(false)
@@ -659,7 +659,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
               ))}
               {isCliBridgeProvider(provider) && modelsForProvider.length === 0 && (
                 <div className="text-xs text-muted-foreground">
-                  Start the CLI bridge at http://127.0.0.1:8766 to load models, or type a model ID manually.
+                  Start the CLI bridge at http://127.0.0.1:8765 to load models, or type a model ID manually.
                 </div>
               )}
               {provider === "ollama" && modelsForProvider.length === 0 && (
@@ -744,7 +744,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                 : provider === "openai-compatible"
                   ? "http://localhost:1234/v1"
                   : isCliBridgeProvider(provider)
-                    ? "http://127.0.0.1:8766/v1"
+                    ? "http://127.0.0.1:8765/v1"
                     : "https://ai-gateway.vercel.sh/v1"
             }
           />

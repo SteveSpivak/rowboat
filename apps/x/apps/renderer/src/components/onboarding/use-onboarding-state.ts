@@ -22,7 +22,7 @@ export interface LlmModelOption {
   release_date?: string
 }
 
-const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8766/v1"
+const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8765/v1"
 
 const CLI_PROVIDER_DEFAULTS: Record<CliBridgeProviderFlavor, { model: string; knowledgeGraphModel: string }> = {
   "codex-cli": { model: "gpt-5.4", knowledgeGraphModel: "gpt-5.4" },

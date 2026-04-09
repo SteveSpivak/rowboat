@@ -254,7 +254,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
                 llmProvider === "ollama"
                   ? "http://localhost:11434"
                   : isCliBridgeProvider
-                    ? "http://127.0.0.1:8766/v1"
+                    ? "http://127.0.0.1:8765/v1"
                   : llmProvider === "openai-compatible"
                     ? "http://localhost:1234/v1"
                     : "https://ai-gateway.vercel.sh/v1"

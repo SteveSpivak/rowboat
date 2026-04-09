@@ -1,6 +1,6 @@
 import z from "zod";
 
-const DEFAULT_CLI_BRIDGE_URL = "http://127.0.0.1:8766/v1";
+const DEFAULT_CLI_BRIDGE_URL = "http://127.0.0.1:8765/v1";
 const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
 
 export type ProviderSummary = {
