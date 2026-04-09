@@ -14,12 +14,22 @@ import { getGatewayProvider } from "./gateway.js";
 export const Provider = LlmProvider;
 export const ModelConfig = LlmModelConfig;
 
-const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8765/v1";
+const CLI_BRIDGE_PORT = Number(process.env.ROWBOAT_CLI_BRIDGE_PORT || "8765");
+const CLI_BRIDGE_BASE_URL = `http://127.0.0.1:${CLI_BRIDGE_PORT}/v1`;
 const CLI_PROVIDER_HEADERS: Record<"codex-cli" | "gemini-cli" | "claude-cli", Record<string, string>> = {
     "codex-cli": { "x-cli-backend": "codex" },
     "gemini-cli": { "x-cli-backend": "gemini" },
     "claude-cli": { "x-cli-backend": "claude" },
 };
+
+function normalizeCliBaseUrl(baseURL?: string): string {
+    const raw = (baseURL ?? "").trim();
+    if (!raw) return CLI_BRIDGE_BASE_URL;
+    if (raw.includes("127.0.0.1:8766")) {
+        return raw.replace("127.0.0.1:8766", `127.0.0.1:${CLI_BRIDGE_PORT}`);
+    }
+    return raw;
+}
 
 export function createProvider(config: z.infer<typeof Provider>): ProviderV2 {
     const { apiKey, baseURL, headers } = config;
@@ -73,7 +83,7 @@ export function createProvider(config: z.infer<typeof Provider>): ProviderV2 {
             return createOpenAICompatible({
                 name: config.flavor,
                 apiKey,
-                baseURL: baseURL || CLI_BRIDGE_BASE_URL,
+                baseURL: normalizeCliBaseUrl(baseURL),
                 headers: { ...cliHeaders, ...(headers ?? {}) },
             });
         }
