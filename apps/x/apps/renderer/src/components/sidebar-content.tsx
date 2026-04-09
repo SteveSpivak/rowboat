@@ -105,6 +105,7 @@ type KnowledgeActions = {
   createFolder: (parentPath?: string) => void
   openGraph: () => void
   openBases: () => void
+  openSourcesSettings?: () => void
   expandAll: () => void
   collapseAll: () => void
   rename: (path: string, newName: string, isDir: boolean) => Promise<void>
@@ -933,6 +934,7 @@ function KnowledgeSection({
   const quickActions = [
     { icon: FilePlus, label: "New Note", action: () => actions.createNote() },
     { icon: FolderPlus, label: "New Folder", action: () => actions.createFolder() },
+    ...(actions.openSourcesSettings ? [{ icon: Folder, label: "Sources", action: () => actions.openSourcesSettings?.() }] : []),
     { icon: Network, label: "Graph View", action: () => actions.openGraph() },
     { icon: Table2, label: "Bases", action: () => actions.openBases() },
   ]

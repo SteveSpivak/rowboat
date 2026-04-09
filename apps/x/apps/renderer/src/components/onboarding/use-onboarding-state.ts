@@ -460,7 +460,7 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
       const knowledgeGraphModel = activeConfig.knowledgeGraphModel.trim() || undefined
       const provider = isCliBridgeProvider(llmProvider)
         ? {
-            flavor: "openai-compatible" as const,
+            flavor: llmProvider,
             baseURL: baseURL || CLI_BRIDGE_BASE_URL,
             headers: CLI_PROVIDER_HEADERS[llmProvider],
           }

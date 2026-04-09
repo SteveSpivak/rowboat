@@ -15,7 +15,7 @@ import { GraphView, type GraphEdge, type GraphNode } from '@/components/graph-vi
 import { BasesView, type BaseConfig, DEFAULT_BASE_CONFIG } from '@/components/bases-view';
 import { useDebounce } from './hooks/use-debounce';
 import { SidebarContentPanel } from '@/components/sidebar-content';
-import { SidebarSectionProvider } from '@/contexts/sidebar-context';
+import { SidebarSectionProvider, useSidebarSection } from '@/contexts/sidebar-context';
 import {
   Conversation,
   ConversationContent,
@@ -623,6 +623,43 @@ function ContentHeader({
       ) : null}
       {children}
     </header>
+  )
+}
+
+function LandingActions({ onOpenSettings }: { onOpenSettings: (tab: "knowledge-sources" | "models" | "mcp") => void }) {
+  const { setActiveSection } = useSidebarSection()
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+      <button
+        type="button"
+        onClick={() => setActiveSection("knowledge")}
+        className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-muted"
+      >
+        Open Knowledge
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpenSettings("knowledge-sources")}
+        className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-muted"
+      >
+        Manage Sources
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpenSettings("models")}
+        className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-muted"
+      >
+        Configure Models
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpenSettings("mcp")}
+        className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-muted"
+      >
+        MCP Servers
+      </button>
+    </div>
   )
 }
 
@@ -3351,6 +3388,10 @@ function App() {
     }
   }, [])
 
+  const openSettingsTab = useCallback((tab: "knowledge-sources" | "models" | "mcp") => {
+    window.dispatchEvent(new CustomEvent("rowboat:open-settings", { detail: { tab } }))
+  }, [])
+
   const knowledgeActions = React.useMemo(() => ({
     createNote: async (parentPath: string = 'knowledge/Notes') => {
       if (isExternalKnowledgeSourcePath(parentPath)) {
@@ -3407,6 +3448,7 @@ function App() {
       }
       void navigateToView({ type: 'file', path: BASES_DEFAULT_TAB_PATH })
     },
+    openSourcesSettings: () => openSettingsTab("knowledge-sources"),
     expandAll: () => setExpandedPaths(new Set(collectDirPaths(tree))),
     collapseAll: () => setExpandedPaths(new Set()),
     rename: async (oldPath: string, newName: string, isDir: boolean) => {
@@ -3501,7 +3543,7 @@ function App() {
     onOpenInNewTab: (path: string) => {
       openFileInNewTab(path)
     },
-  }), [tree, selectedPath, isGraphOpen, selectedBackgroundTask, workspaceRoot, navigateToFile, navigateToView, openFileInNewTab, fileTabs, closeFileTab, removeEditorCacheForPath])
+  }), [tree, selectedPath, isGraphOpen, selectedBackgroundTask, workspaceRoot, navigateToFile, navigateToView, openFileInNewTab, fileTabs, closeFileTab, removeEditorCacheForPath, openSettingsTab])
 
   // Handler for when a voice note is created/updated
   const handleVoiceNoteCreated = useCallback(async (notePath: string) => {
@@ -4408,6 +4450,10 @@ function App() {
                                 <div className="text-2xl font-semibold tracking-tight text-foreground/80 sm:text-3xl md:text-4xl">
                                   What are we working on?
                                 </div>
+                                <div className="mt-2 text-sm text-muted-foreground">
+                                  Start a chat, open your knowledge base, or connect local sources.
+                                </div>
+                                <LandingActions onOpenSettings={openSettingsTab} />
                               </ConversationEmptyState>
                             ) : (
                               <>

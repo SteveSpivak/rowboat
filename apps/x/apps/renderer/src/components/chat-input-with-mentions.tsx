@@ -62,6 +62,9 @@ const providerDisplayNames: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   google: 'Gemini',
+  'codex-cli': 'Codex CLI',
+  'gemini-cli': 'Gemini CLI',
+  'claude-cli': 'Claude CLI',
   ollama: 'Ollama',
   openrouter: 'OpenRouter',
   aigateway: 'AI Gateway',
@@ -70,7 +73,7 @@ const providerDisplayNames: Record<string, string> = {
 }
 
 interface ConfiguredModel {
-  flavor: "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible" | "rowboat"
+  flavor: "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible" | "rowboat" | "codex-cli" | "gemini-cli" | "claude-cli"
   model: string
   apiKey?: string
   baseURL?: string

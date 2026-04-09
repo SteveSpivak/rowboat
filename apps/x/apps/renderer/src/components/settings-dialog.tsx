@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Server, Key, Shield, Palette, Monitor, Sun, Moon, Loader2, CheckCircle2, Plus, X, Wrench, Search, ChevronRight, Link2, Tags, Mail, BookOpen, User, Plug } from "lucide-react"
+import { Server, Key, Shield, Palette, Monitor, Sun, Moon, Loader2, CheckCircle2, Plus, X, Wrench, Search, ChevronRight, Link2, Tags, Mail, BookOpen, User, Plug, Folder } from "lucide-react"
 
 import {
   Dialog,
@@ -25,7 +25,7 @@ import { toast } from "sonner"
 import { AccountSettings } from "@/components/settings/account-settings"
 import { ConnectedAccountsSettings } from "@/components/settings/connected-accounts-settings"
 
-type ConfigTab = "account" | "connected-accounts" | "models" | "mcp" | "security" | "appearance" | "tools" | "note-tagging"
+type ConfigTab = "account" | "connected-accounts" | "models" | "knowledge-sources" | "mcp" | "security" | "appearance" | "tools" | "note-tagging"
 
 interface TabConfig {
   id: ConfigTab
@@ -53,7 +53,13 @@ const tabs: TabConfig[] = [
     label: "Models",
     icon: Key,
     path: "config/models.json",
-    description: "Configure LLM providers and API keys",
+    description: "Configure CLI and API model providers",
+  },
+  {
+    id: "knowledge-sources",
+    label: "Knowledge Sources",
+    icon: Folder,
+    description: "Connect local knowledge roots",
   },
   {
     id: "mcp",
@@ -162,7 +168,8 @@ function AppearanceSettings() {
 
 // --- Model Settings UI ---
 
-type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible"
+type CliBridgeProviderFlavor = "codex-cli" | "gemini-cli" | "claude-cli"
+type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible" | CliBridgeProviderFlavor
 
 interface LlmModelOption {
   id: string
@@ -171,13 +178,16 @@ interface LlmModelOption {
 }
 
 const primaryProviders: Array<{ id: LlmProviderFlavor; name: string; description: string }> = [
-  { id: "openai", name: "OpenAI", description: "GPT models" },
-  { id: "anthropic", name: "Anthropic", description: "Claude models" },
-  { id: "google", name: "Gemini", description: "Google AI Studio" },
+  { id: "codex-cli", name: "Codex CLI", description: "Primary CLI backend" },
+  { id: "gemini-cli", name: "Gemini CLI", description: "Gemini via CLI" },
+  { id: "claude-cli", name: "Claude CLI", description: "Claude via CLI" },
   { id: "ollama", name: "Ollama (Local)", description: "Run models locally" },
 ]
 
 const moreProviders: Array<{ id: LlmProviderFlavor; name: string; description: string }> = [
+  { id: "openai", name: "OpenAI", description: "GPT models" },
+  { id: "anthropic", name: "Anthropic", description: "Claude models" },
+  { id: "google", name: "Gemini", description: "Google AI Studio" },
   { id: "openrouter", name: "OpenRouter", description: "Multiple models, one key" },
   { id: "aigateway", name: "AI Gateway (Vercel)", description: "Vercel's AI Gateway" },
   { id: "openai-compatible", name: "OpenAI-Compatible", description: "Custom OpenAI-compatible API" },
@@ -186,17 +196,32 @@ const moreProviders: Array<{ id: LlmProviderFlavor; name: string; description: s
 const preferredDefaults: Partial<Record<LlmProviderFlavor, string>> = {
   openai: "gpt-5.2",
   anthropic: "claude-opus-4-6-20260202",
+  "codex-cli": "gpt-5.4",
+  "gemini-cli": "gemini-3.1-pro-preview",
+  "claude-cli": "claude-sonnet-4-6",
 }
 
 const defaultBaseURLs: Partial<Record<LlmProviderFlavor, string>> = {
   ollama: "http://localhost:11434",
   "openai-compatible": "http://localhost:1234/v1",
+  "codex-cli": "http://127.0.0.1:8766/v1",
+  "gemini-cli": "http://127.0.0.1:8766/v1",
+  "claude-cli": "http://127.0.0.1:8766/v1",
 }
+
+const CLI_PROVIDER_HEADERS: Record<CliBridgeProviderFlavor, Record<string, string>> = {
+  "codex-cli": { "x-cli-backend": "codex" },
+  "gemini-cli": { "x-cli-backend": "gemini" },
+  "claude-cli": { "x-cli-backend": "claude" },
+}
+
+const isCliBridgeProvider = (provider: LlmProviderFlavor): provider is CliBridgeProviderFlavor =>
+  provider === "codex-cli" || provider === "gemini-cli" || provider === "claude-cli"
 
 function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
   const [provider, setProvider] = useState<LlmProviderFlavor>("openai")
   const [defaultProvider, setDefaultProvider] = useState<LlmProviderFlavor | null>(null)
-  const [providerConfigs, setProviderConfigs] = useState<Record<LlmProviderFlavor, { apiKey: string; baseURL: string; models: string[]; knowledgeGraphModel: string }>>({
+  const [providerConfigs, setProviderConfigs] = useState<Record<LlmProviderFlavor, { apiKey: string; baseURL: string; models: string[]; knowledgeGraphModel: string; headers?: Record<string, string> }>>({
     openai: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
     anthropic: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
     google: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
@@ -204,6 +229,9 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     aigateway: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
     ollama: { apiKey: "", baseURL: "http://localhost:11434", models: [""], knowledgeGraphModel: "" },
     "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", models: [""], knowledgeGraphModel: "" },
+    "codex-cli": { apiKey: "", baseURL: "http://127.0.0.1:8766/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["codex-cli"] },
+    "gemini-cli": { apiKey: "", baseURL: "http://127.0.0.1:8766/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["gemini-cli"] },
+    "claude-cli": { apiKey: "", baseURL: "http://127.0.0.1:8766/v1", models: [""], knowledgeGraphModel: "", headers: CLI_PROVIDER_HEADERS["claude-cli"] },
   })
   const [modelsCatalog, setModelsCatalog] = useState<Record<string, LlmModelOption[]>>({})
   const [modelsLoading, setModelsLoading] = useState(false)
@@ -215,9 +243,9 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
   const activeConfig = providerConfigs[provider]
   const showApiKey = provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway" || provider === "openai-compatible"
   const requiresApiKey = provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway"
-  const showBaseURL = provider === "ollama" || provider === "openai-compatible" || provider === "aigateway"
-  const requiresBaseURL = provider === "ollama" || provider === "openai-compatible"
-  const isLocalProvider = provider === "ollama" || provider === "openai-compatible"
+  const showBaseURL = provider === "ollama" || provider === "openai-compatible" || provider === "aigateway" || isCliBridgeProvider(provider)
+  const requiresBaseURL = provider === "ollama" || provider === "openai-compatible" || isCliBridgeProvider(provider)
+  const isLocalProvider = provider === "ollama" || provider === "openai-compatible" || isCliBridgeProvider(provider)
   const modelsForProvider = modelsCatalog[provider] || []
   const showModelInput = isLocalProvider || modelsForProvider.length === 0
   const isMoreProvider = moreProviders.some(p => p.id === provider)
@@ -229,7 +257,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     (!requiresBaseURL || activeConfig.baseURL.trim().length > 0)
 
   const updateConfig = useCallback(
-    (prov: LlmProviderFlavor, updates: Partial<{ apiKey: string; baseURL: string; models: string[]; knowledgeGraphModel: string }>) => {
+    (prov: LlmProviderFlavor, updates: Partial<{ apiKey: string; baseURL: string; models: string[]; knowledgeGraphModel: string; headers?: Record<string, string> }>) => {
       setProviderConfigs(prev => ({
         ...prev,
         [prov]: { ...prev[prov], ...updates },
@@ -297,11 +325,13 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                   const savedModels: string[] = Array.isArray(e.models) && e.models.length > 0
                     ? e.models
                     : e.model ? [e.model] : [""];
-                  next[key as LlmProviderFlavor] = {
+                  const flavor = key as LlmProviderFlavor
+                  next[flavor] = {
                     apiKey: e.apiKey || "",
-                    baseURL: e.baseURL || (defaultBaseURLs[key as LlmProviderFlavor] || ""),
+                    baseURL: e.baseURL || (defaultBaseURLs[flavor] || ""),
                     models: savedModels,
                     knowledgeGraphModel: e.knowledgeGraphModel || "",
+                    headers: e.headers || (isCliBridgeProvider(flavor) ? CLI_PROVIDER_HEADERS[flavor] : undefined),
                   };
                 }
               }
@@ -318,6 +348,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                 baseURL: parsed.provider.baseURL || (defaultBaseURLs[flavor] || ""),
                 models: activeModels.length > 0 ? activeModels : [""],
                 knowledgeGraphModel: parsed.knowledgeGraphModel || "",
+                headers: parsed.provider.headers || (isCliBridgeProvider(flavor) ? CLI_PROVIDER_HEADERS[flavor] : undefined),
               };
             }
             return next;
@@ -383,11 +414,18 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     try {
       const allModels = activeConfig.models.map(m => m.trim()).filter(Boolean)
       const providerConfig = {
-        provider: {
-          flavor: provider,
-          apiKey: activeConfig.apiKey.trim() || undefined,
-          baseURL: activeConfig.baseURL.trim() || undefined,
-        },
+        provider: isCliBridgeProvider(provider)
+          ? {
+              flavor: provider,
+              baseURL: activeConfig.baseURL.trim() || defaultBaseURLs[provider] || undefined,
+              headers: activeConfig.headers ?? CLI_PROVIDER_HEADERS[provider],
+            }
+          : {
+              flavor: provider,
+              apiKey: activeConfig.apiKey.trim() || undefined,
+              baseURL: activeConfig.baseURL.trim() || defaultBaseURLs[provider] || undefined,
+              headers: activeConfig.headers,
+            },
         model: allModels[0] || "",
         models: allModels,
         knowledgeGraphModel: activeConfig.knowledgeGraphModel.trim() || undefined,
@@ -415,11 +453,18 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     if (!allModels[0]) return
     try {
       await window.ipc.invoke("models:saveConfig", {
-        provider: {
-          flavor: prov,
-          apiKey: config.apiKey.trim() || undefined,
-          baseURL: config.baseURL.trim() || undefined,
-        },
+        provider: isCliBridgeProvider(prov)
+          ? {
+              flavor: prov,
+              baseURL: config.baseURL.trim() || defaultBaseURLs[prov] || undefined,
+              headers: config.headers ?? CLI_PROVIDER_HEADERS[prov],
+            }
+          : {
+              flavor: prov,
+              apiKey: config.apiKey.trim() || undefined,
+              baseURL: config.baseURL.trim() || undefined,
+              headers: config.headers,
+            },
         model: allModels[0],
         models: allModels,
         knowledgeGraphModel: config.knowledgeGraphModel.trim() || undefined,
@@ -459,7 +504,13 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
       })
       setProviderConfigs(prev => ({
         ...prev,
-        [prov]: { apiKey: "", baseURL: defaultBaseURLs[prov] || "", models: [""], knowledgeGraphModel: "" },
+        [prov]: {
+          apiKey: "",
+          baseURL: defaultBaseURLs[prov] || "",
+          models: [""],
+          knowledgeGraphModel: "",
+          headers: isCliBridgeProvider(prov) ? CLI_PROVIDER_HEADERS[prov] : undefined,
+        },
       }))
       setTestState({ status: "idle" })
       window.dispatchEvent(new Event('models-config-changed'))
@@ -570,11 +621,15 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
               {activeConfig.models.map((model, index) => (
                 <div key={index} className="group/model relative">
                   {showModelInput ? (
-                    <Input
-                      value={model}
-                      onChange={(e) => updateModelAt(provider, index, e.target.value)}
-                      placeholder="Enter model"
-                    />
+                      <Input
+                        value={model}
+                        onChange={(e) => updateModelAt(provider, index, e.target.value)}
+                        placeholder={
+                          isCliBridgeProvider(provider)
+                            ? preferredDefaults[provider] || "Enter model"
+                            : "Enter model"
+                        }
+                      />
                   ) : (
                     <Select
                       value={model}
@@ -678,9 +733,16 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                 ? "http://localhost:11434"
                 : provider === "openai-compatible"
                   ? "http://localhost:1234/v1"
-                  : "https://ai-gateway.vercel.sh/v1"
+                  : isCliBridgeProvider(provider)
+                    ? "http://127.0.0.1:8766/v1"
+                    : "https://ai-gateway.vercel.sh/v1"
             }
           />
+          {isCliBridgeProvider(provider) && (
+            <p className="text-xs text-muted-foreground">
+              CLI bridge expected at {defaultBaseURLs[provider]}. Start the CLI bridge first or update this URL.
+            </p>
+          )}
         </div>
       )}
 
@@ -709,6 +771,255 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
           "Test & Save"
         )}
       </Button>
+    </div>
+  )
+}
+
+// --- Knowledge Sources Settings ---
+
+type ExternalKnowledgeSourcesConfig = {
+  newVault?: {
+    enabled?: boolean
+    sourceRoot?: string
+    excludeTopLevel?: string[]
+  }
+  projectCatalog?: {
+    enabled?: boolean
+    roots?: string[]
+    maxDepth?: number
+    docCandidates?: string[]
+  }
+}
+
+const DEFAULT_EXTERNAL_SOURCES_CONFIG: ExternalKnowledgeSourcesConfig = {
+  newVault: {
+    enabled: true,
+    sourceRoot: "/Users/steve.spivak/NewVault",
+    excludeTopLevel: [],
+  },
+  projectCatalog: {
+    enabled: true,
+    roots: ["/Users/steve.spivak/dev", "/Users/steve.spivak/agent-workspace"],
+    maxDepth: 2,
+    docCandidates: ["README.md", "AGENTS.md", "CLAUDE.md"],
+  },
+}
+
+function normalizeSourcesConfig(raw: ExternalKnowledgeSourcesConfig | null): ExternalKnowledgeSourcesConfig {
+  const next = raw ?? {}
+  return {
+    newVault: {
+      enabled: next.newVault?.enabled ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.newVault?.enabled ?? false,
+      sourceRoot: next.newVault?.sourceRoot ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.newVault?.sourceRoot ?? "",
+      excludeTopLevel: next.newVault?.excludeTopLevel ?? [],
+    },
+    projectCatalog: {
+      enabled: next.projectCatalog?.enabled ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.enabled ?? false,
+      roots: next.projectCatalog?.roots ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.roots ?? [],
+      maxDepth: typeof next.projectCatalog?.maxDepth === "number"
+        ? next.projectCatalog.maxDepth
+        : DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.maxDepth ?? 2,
+      docCandidates: next.projectCatalog?.docCandidates ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.docCandidates ?? [],
+    },
+  }
+}
+
+function KnowledgeSourcesSettings({ dialogOpen }: { dialogOpen: boolean }) {
+  const [config, setConfig] = useState<ExternalKnowledgeSourcesConfig>(DEFAULT_EXTERNAL_SOURCES_CONFIG)
+  const [initialConfig, setInitialConfig] = useState<string>("")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!dialogOpen) return
+    let mounted = true
+
+    async function loadConfig() {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await window.ipc.invoke("workspace:readFile", {
+          path: "config/external-knowledge-sources.json",
+        })
+        const parsed = JSON.parse(result.data) as ExternalKnowledgeSourcesConfig
+        const normalized = normalizeSourcesConfig(parsed)
+        if (mounted) {
+          setConfig(normalized)
+          setInitialConfig(JSON.stringify(normalized))
+        }
+      } catch {
+        const normalized = normalizeSourcesConfig(null)
+        if (mounted) {
+          setConfig(normalized)
+          setInitialConfig(JSON.stringify(normalized))
+        }
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    loadConfig()
+    return () => { mounted = false }
+  }, [dialogOpen])
+
+  const hasChanges = initialConfig !== JSON.stringify(config)
+
+  const updateNewVault = (updates: Partial<NonNullable<ExternalKnowledgeSourcesConfig["newVault"]>>) => {
+    setConfig(prev => ({
+      ...prev,
+      newVault: { ...prev.newVault, ...updates },
+    }))
+  }
+
+  const updateProjectCatalog = (updates: Partial<NonNullable<ExternalKnowledgeSourcesConfig["projectCatalog"]>>) => {
+    setConfig(prev => ({
+      ...prev,
+      projectCatalog: { ...prev.projectCatalog, ...updates },
+    }))
+  }
+
+  const updateProjectRoot = (index: number, value: string) => {
+    const roots = [...(config.projectCatalog?.roots ?? [])]
+    roots[index] = value
+    updateProjectCatalog({ roots })
+  }
+
+  const addProjectRoot = () => {
+    const roots = [...(config.projectCatalog?.roots ?? []), ""]
+    updateProjectCatalog({ roots })
+  }
+
+  const removeProjectRoot = (index: number) => {
+    const roots = (config.projectCatalog?.roots ?? []).filter((_, i) => i !== index)
+    updateProjectCatalog({ roots })
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const normalized = normalizeSourcesConfig(config)
+      await window.ipc.invoke("workspace:writeFile", {
+        path: "config/external-knowledge-sources.json",
+        data: JSON.stringify(normalized, null, 2),
+      })
+      setInitialConfig(JSON.stringify(normalized))
+      toast.success("Knowledge sources saved")
+    } catch {
+      setError("Failed to save knowledge sources")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+        <Loader2 className="size-4 animate-spin mr-2" />
+        Loading...
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-medium">NewVault brain</h4>
+            <p className="text-xs text-muted-foreground">
+              Mount your NewVault knowledge as read-only sources under knowledge/Sources.
+            </p>
+          </div>
+          <Switch
+            checked={config.newVault?.enabled ?? false}
+            onCheckedChange={(checked) => updateNewVault({ enabled: checked })}
+          />
+        </div>
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Path</span>
+          <Input
+            value={config.newVault?.sourceRoot ?? ""}
+            onChange={(e) => updateNewVault({ sourceRoot: e.target.value })}
+            placeholder="/Users/steve.spivak/NewVault"
+          />
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-medium">Project catalog</h4>
+            <p className="text-xs text-muted-foreground">
+              Index README/AGENTS/CLAUDE files from repo roots under knowledge/Sources/Projects.
+            </p>
+          </div>
+          <Switch
+            checked={config.projectCatalog?.enabled ?? false}
+            onCheckedChange={(checked) => updateProjectCatalog({ enabled: checked })}
+          />
+        </div>
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Roots</span>
+          <div className="space-y-2">
+            {(config.projectCatalog?.roots ?? []).map((root, index) => (
+              <div key={`${root}-${index}`} className="flex items-center gap-2">
+                <Input
+                  value={root}
+                  onChange={(e) => updateProjectRoot(index, e.target.value)}
+                  placeholder="/Users/steve.spivak/dev"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeProjectRoot(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={addProjectRoot}>
+              <Plus className="size-3.5 mr-1" />
+              Add root
+            </Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Max depth</span>
+            <Input
+              type="number"
+              min={1}
+              max={6}
+              value={config.projectCatalog?.maxDepth ?? 2}
+              onChange={(e) => updateProjectCatalog({ maxDepth: Number(e.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Doc candidates</span>
+            <div className="rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
+              {(config.projectCatalog?.docCandidates ?? []).join(", ")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+        External sources are read-only. Changes apply within ~30 seconds; restart the app for live watcher updates.
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted-foreground">
+          {hasChanges ? "Unsaved changes" : null}
+        </div>
+        <div className="flex items-center gap-2">
+          {error && <span className="text-xs text-destructive">{error}</span>}
+          <Button size="sm" onClick={handleSave} disabled={saving || !hasChanges}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -869,6 +1180,33 @@ function ToolsLibrarySettings({ dialogOpen, rowboatConnected }: { dialogOpen: bo
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground space-y-2">
+        <div>
+          <span className="font-medium text-foreground">Local connectors</span> live in Models (Codex CLI, Gemini CLI, Claude CLI, Ollama).
+          MCP servers are configured in the MCP Servers tab.
+        </div>
+        <div>
+          Skills are built-in. See <span className="font-medium">apps/x/packages/core/src/application/assistant/skills</span> to add or extend skills.
+          Triggers can use <span className="font-medium">agent-schedule.json</span> or Codex Automations.
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent("rowboat:open-settings", { detail: { tab: "models" } }))}
+          >
+            Open Models
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent("rowboat:open-settings", { detail: { tab: "mcp" } }))}
+          >
+            Open MCP
+          </Button>
+        </div>
+      </div>
+
       {/* Section A: API Key (only in BYOK mode) */}
       {!rowboatConnected && (
         <div className="space-y-2">
@@ -1529,7 +1867,7 @@ export function SettingsDialog({ children }: SettingsDialogProps) {
   }
 
   const loadConfig = useCallback(async (tab: ConfigTab) => {
-    if (tab === "appearance" || tab === "models" || tab === "note-tagging" || tab === "account" || tab === "connected-accounts") return
+    if (tab === "appearance" || tab === "models" || tab === "knowledge-sources" || tab === "note-tagging" || tab === "account" || tab === "connected-accounts") return
     const tabConfig = tabs.find((t) => t.id === tab)!
     if (!tabConfig.path) return
     setLoading(true)
@@ -1583,6 +1921,18 @@ export function SettingsDialog({ children }: SettingsDialogProps) {
       loadConfig(activeTab)
     }
   }, [open, activeTab, isJsonTab, loadConfig])
+
+  useEffect(() => {
+    const handleOpenSettings = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: ConfigTab }>).detail
+      setOpen(true)
+      if (detail?.tab) {
+        setActiveTab(detail.tab)
+      }
+    }
+    window.addEventListener("rowboat:open-settings", handleOpenSettings as EventListener)
+    return () => window.removeEventListener("rowboat:open-settings", handleOpenSettings as EventListener)
+  }, [])
 
   const handleTabChange = (tab: ConfigTab) => {
     if (isJsonTab && hasChanges) {
@@ -1646,6 +1996,8 @@ export function SettingsDialog({ children }: SettingsDialogProps) {
                 rowboatConnected
                   ? <RowboatModelSettings dialogOpen={open} />
                   : <ModelSettings dialogOpen={open} />
+              ) : activeTab === "knowledge-sources" ? (
+                <KnowledgeSourcesSettings dialogOpen={open} />
               ) : activeTab === "note-tagging" ? (
                 <NoteTaggingSettings dialogOpen={open} />
               ) : activeTab === "appearance" ? (

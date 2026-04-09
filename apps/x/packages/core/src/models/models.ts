@@ -14,6 +14,13 @@ import { getGatewayProvider } from "./gateway.js";
 export const Provider = LlmProvider;
 export const ModelConfig = LlmModelConfig;
 
+const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8766/v1";
+const CLI_PROVIDER_HEADERS: Record<"codex-cli" | "gemini-cli" | "claude-cli", Record<string, string>> = {
+    "codex-cli": { "x-cli-backend": "codex" },
+    "gemini-cli": { "x-cli-backend": "gemini" },
+    "claude-cli": { "x-cli-backend": "claude" },
+};
+
 export function createProvider(config: z.infer<typeof Provider>): ProviderV2 {
     const { apiKey, baseURL, headers } = config;
     switch (config.flavor) {
@@ -59,6 +66,17 @@ export function createProvider(config: z.infer<typeof Provider>): ProviderV2 {
                 baseURL: baseURL || "",
                 headers,
             });
+        case "codex-cli":
+        case "gemini-cli":
+        case "claude-cli": {
+            const cliHeaders = CLI_PROVIDER_HEADERS[config.flavor];
+            return createOpenAICompatible({
+                name: config.flavor,
+                apiKey,
+                baseURL: baseURL || CLI_BRIDGE_BASE_URL,
+                headers: { ...cliHeaders, ...(headers ?? {}) },
+            });
+        }
         case "openrouter":
             return createOpenRouter({
                 apiKey,
@@ -109,7 +127,12 @@ export async function testModelConnection(
     model: string,
     timeoutMs?: number,
 ): Promise<{ success: boolean; error?: string }> {
-    const isLocal = providerConfig.flavor === "ollama" || providerConfig.flavor === "openai-compatible";
+    const isLocal =
+        providerConfig.flavor === "ollama"
+        || providerConfig.flavor === "openai-compatible"
+        || providerConfig.flavor === "codex-cli"
+        || providerConfig.flavor === "gemini-cli"
+        || providerConfig.flavor === "claude-cli";
     const effectiveTimeout = timeoutMs ?? (isLocal ? 60000 : 8000);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
