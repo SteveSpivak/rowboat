@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { mergeAttributes, Node } from '@tiptap/react'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { Radio, ChevronRight, X, Clock, Code2, Check, RefreshCw, Loader2 } from 'lucide-react'
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { parse as parseYaml } from 'yaml'
 import { Streamdown } from 'streamdown'
 
 function formatDateTime(iso: string): string {
