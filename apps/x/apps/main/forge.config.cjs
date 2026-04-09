@@ -4,6 +4,11 @@
 
 const path = require('path');
 const pkg = require('./package.json');
+const shouldNotarize = Boolean(
+    process.env.APPLE_ID
+    && process.env.APPLE_PASSWORD
+    && process.env.APPLE_TEAM_ID
+);
 
 module.exports = {
     packagerConfig: {
@@ -21,11 +26,11 @@ module.exports = {
                 'entitlements-inherit': path.join(__dirname, 'entitlements.plist'),
             }),
         },
-        osxNotarize: {
+        osxNotarize: shouldNotarize ? {
             appleId: process.env.APPLE_ID,
             appleIdPassword: process.env.APPLE_PASSWORD,
-            teamId: process.env.APPLE_TEAM_ID
-        },
+            teamId: process.env.APPLE_TEAM_ID,
+        } : undefined,
         // Since we bundle everything with esbuild, we don't need node_modules at all.
         // These settings prevent Forge's dependency walker (flora-colossus) from trying
         // to analyze/copy node_modules, which fails with pnpm's symlinked workspaces.
