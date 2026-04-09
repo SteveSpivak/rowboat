@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { HelpModal } from '@/components/common/help-modal';
+import { storageRemoveItem } from '@/app/lib/browser-storage';
 
 interface HelpModalContextType {
     showHelpModal: () => void;
@@ -17,7 +18,7 @@ export function HelpModalProvider({ children }: { children: ReactNode }) {
     const hideHelpModal = () => setIsOpen(false);
 
     const handleStartTour = () => {
-        localStorage.removeItem('user_product_tour_completed');
+        storageRemoveItem('user_product_tour_completed');
         window.location.reload();
     };
 

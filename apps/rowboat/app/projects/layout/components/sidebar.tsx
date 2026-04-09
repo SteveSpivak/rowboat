@@ -30,6 +30,7 @@ import { useHelpModal } from "@/app/providers/help-modal-provider";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TextareaWithSend } from "@/app/components/ui/textarea-with-send";
+import { storageRemoveItem } from "@/app/lib/browser-storage";
 
 interface SidebarProps {
   projectId?: string;
@@ -129,11 +130,15 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
     href: string;
     label: string;
     icon: any;
-    requiresProject: boolean;
-  }> = [];
+  }> = [
+    { href: "/projects?view=existing", label: "Assistants", icon: WorkflowIcon },
+    { href: "/projects?view=new", label: "New Assistant", icon: PlayIcon },
+    { href: "/projects#knowledge", label: "Knowledge", icon: Clock },
+    { href: "/projects#connectors", label: "Connectors", icon: Plug },
+  ];
 
   const handleStartTour = () => {
-    localStorage.removeItem('user_product_tour_completed');
+    storageRemoveItem('user_product_tour_completed');
     window.location.reload();
   };
 
@@ -168,6 +173,74 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
 
           {/* Navigation Items */}
           <nav className="p-3 space-y-4">
+            {isProjectsRoute && (
+              projectsNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = false;
+                if (collapsed) {
+                  return (
+                    <Tooltip
+                      key={item.href}
+                      content={collapsed ? item.label : ""}
+                      showArrow
+                      placement="right"
+                    >
+                      <Link
+                        href={item.href}
+                        className={`
+                          relative w-full rounded-md flex items-center
+                          text-[15px] font-medium transition-all duration-200
+                          px-2.5 py-3 gap-2.5
+                          ${isActive
+                            ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-l-2 border-indigo-600 dark:border-indigo-400'
+                            : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-300'
+                          }
+                        `}
+                      >
+                        <Icon
+                          size={COLLAPSED_ICON_SIZE}
+                          className={`
+                            transition-all duration-200
+                            ${isActive
+                              ? 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-zinc-500 dark:text-zinc-400'
+                            }
+                          `}
+                        />
+                      </Link>
+                    </Tooltip>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`
+                      relative w-full rounded-md flex items-center
+                      text-[15px] font-medium transition-all duration-200
+                      px-2.5 py-3 gap-2.5
+                      ${isActive
+                        ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-l-2 border-indigo-600 dark:border-indigo-400'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-300'
+                      }
+                    `}
+                  >
+                    <Icon
+                      size={EXPANDED_ICON_SIZE}
+                      className={`
+                        transition-all duration-200
+                        ${isActive
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-zinc-500 dark:text-zinc-400'
+                        }
+                      `}
+                    />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })
+            )}
             {!isProjectsRoute && projectId && (
               // Project-specific navigation
               navItems.map((item) => {
@@ -175,8 +248,8 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
                 const fullPath = `/projects/${projectId}/${item.href}`;
                 const isActive = pathname.startsWith(fullPath);
 
-                return <>
-                  {collapsed && <Tooltip
+                if (collapsed) {
+                  return <Tooltip
                     key={item.href}
                     content={collapsed ? item.label : ""}
                     showArrow
@@ -218,8 +291,11 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
                         `}
                       />
                     </Link>
-                  </Tooltip>}
-                  {!collapsed && <Link
+                  </Tooltip>;
+                }
+
+                return <Link
+                    key={item.href}
                     href={fullPath}
                     className={`
                         relative w-full rounded-md flex items-center
@@ -255,8 +331,7 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
                         `}
                     />
                     <span>{item.label}</span>
-                  </Link>}
-                </>
+                  </Link>
               })
             )}
           </nav>

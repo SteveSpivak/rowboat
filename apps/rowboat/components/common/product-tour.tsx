@@ -2,6 +2,7 @@
 import { useFloating, offset, flip, shift, arrow, FloatingArrow, FloatingPortal, autoUpdate } from '@floating-ui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { XIcon } from 'lucide-react';
+import { storageGetItem, storageRemoveItem, storageSetItem } from '@/app/lib/browser-storage';
 
 export interface TourStep {
     target: string;
@@ -156,7 +157,7 @@ export function ProductTour({
     // Check if tour has been completed by the user, unless forced
     useEffect(() => {
         if (forceStart) return;
-        const tourCompleted = localStorage.getItem('user_product_tour_completed');
+        const tourCompleted = storageGetItem('user_product_tour_completed');
         if (tourCompleted) {
             setShouldShow(false);
         }
@@ -216,9 +217,9 @@ export function ProductTour({
             setCurrentStep(prev => prev + 1);
         } else {
             // Mark tour as completed for the user
-            localStorage.setItem('user_product_tour_completed', 'true');
+            storageSetItem('user_product_tour_completed', 'true');
             // Clean up any old project-specific tour flags
-            localStorage.removeItem(`project_tour_${projectId}`);
+            storageRemoveItem(`project_tour_${projectId}`);
             setShouldShow(false);
             onComplete();
         }
@@ -226,9 +227,9 @@ export function ProductTour({
 
     const handleSkip = useCallback(() => {
         // Mark tour as completed for the user
-        localStorage.setItem('user_product_tour_completed', 'true');
+        storageSetItem('user_product_tour_completed', 'true');
         // Clean up any old project-specific tour flags
-        localStorage.removeItem(`project_tour_${projectId}`);
+        storageRemoveItem(`project_tour_${projectId}`);
         setShouldShow(false);
         onComplete();
     }, [projectId, onComplete]);

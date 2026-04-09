@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ProgressBar, ProgressStep } from "@/components/ui/progress-bar";
 import { useUser } from '@auth0/nextjs-auth0';
 import { useState, useEffect } from "react";
-import { SHOW_COMMUNITY_PUBLISH } from "@/app/lib/feature_flags";
+import { SHOW_COMMUNITY_PUBLISH, USE_AUTH } from "@/app/lib/feature_flags";
 
 interface TopBarProps {
     localProjectName: string;
@@ -61,7 +61,19 @@ interface TopBarProps {
     communityPublishSuccess: boolean;
 }
 
-export function TopBar({
+export function TopBar(props: TopBarProps) {
+    if (!USE_AUTH) {
+        return <TopBarBase {...props} user={null} />;
+    }
+    return <TopBarWithAuth {...props} />;
+}
+
+function TopBarWithAuth(props: TopBarProps) {
+    const { user } = useUser();
+    return <TopBarBase {...props} user={user ?? null} />;
+}
+
+function TopBarBase({
     localProjectName,
     projectNameError,
     onProjectNameChange,
@@ -104,7 +116,8 @@ export function TopBar({
     onCommunityPublish,
     communityPublishing,
     communityPublishSuccess,
-}: TopBarProps) {
+    user,
+}: TopBarProps & { user: { name?: string | null; email?: string | null } | null }) {
     const router = useRouter();
     const params = useParams();
     const projectId = typeof (params as any).projectId === 'string' ? (params as any).projectId : (params as any).projectId?.[0];
@@ -138,8 +151,6 @@ export function TopBar({
         }
     }, [communityPublishSuccess, onShareModalClose]);
 
-    const { user } = useUser();
-    
     const getUserDisplayName = () => {
         if (!user) return 'Anonymous';
         return user.name ?? user.email ?? 'Anonymous';

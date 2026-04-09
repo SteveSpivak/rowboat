@@ -1,7 +1,7 @@
 export const tokens = {
   typography: {
     fonts: {
-      sans: 'Inter, system-ui, -apple-system, sans-serif',
+      sans: 'system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
     },
     weights: {
       normal: 'font-normal',

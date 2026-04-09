@@ -12,7 +12,9 @@ export type Step = 0 | 1 | 2 | 3
 
 export type OnboardingPath = 'rowboat' | 'byok' | null
 
-export type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible"
+type CliBridgeProviderFlavor = "codex-cli" | "gemini-cli" | "claude-cli"
+
+export type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible" | CliBridgeProviderFlavor
 
 export interface LlmModelOption {
   id: string
@@ -20,12 +22,30 @@ export interface LlmModelOption {
   release_date?: string
 }
 
+const CLI_BRIDGE_BASE_URL = "http://127.0.0.1:8766/v1"
+
+const CLI_PROVIDER_DEFAULTS: Record<CliBridgeProviderFlavor, { model: string; knowledgeGraphModel: string }> = {
+  "codex-cli": { model: "gpt-5.4", knowledgeGraphModel: "gpt-5.4" },
+  "gemini-cli": { model: "gemini-3.1-pro-preview", knowledgeGraphModel: "gemini-3.1-pro-preview" },
+  "claude-cli": { model: "claude-sonnet-4-6", knowledgeGraphModel: "claude-sonnet-4-6" },
+}
+
+const CLI_PROVIDER_HEADERS: Record<CliBridgeProviderFlavor, Record<string, string>> = {
+  "codex-cli": { "x-cli-backend": "codex" },
+  "gemini-cli": { "x-cli-backend": "gemini" },
+  "claude-cli": { "x-cli-backend": "claude" },
+}
+
+function isCliBridgeProvider(provider: LlmProviderFlavor): provider is CliBridgeProviderFlavor {
+  return provider === "codex-cli" || provider === "gemini-cli" || provider === "claude-cli"
+}
+
 export function useOnboardingState(open: boolean, onComplete: () => void) {
   const [currentStep, setCurrentStep] = useState<Step>(0)
   const [onboardingPath, setOnboardingPath] = useState<OnboardingPath>(null)
 
   // LLM setup state
-  const [llmProvider, setLlmProvider] = useState<LlmProviderFlavor>("openai")
+  const [llmProvider, setLlmProvider] = useState<LlmProviderFlavor>("codex-cli")
   const [modelsCatalog, setModelsCatalog] = useState<Record<string, LlmModelOption[]>>({})
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
@@ -37,6 +57,9 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
     aigateway: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "" },
     ollama: { apiKey: "", baseURL: "http://localhost:11434", model: "", knowledgeGraphModel: "" },
     "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", model: "", knowledgeGraphModel: "" },
+    "codex-cli": { apiKey: "", baseURL: CLI_BRIDGE_BASE_URL, model: CLI_PROVIDER_DEFAULTS["codex-cli"].model, knowledgeGraphModel: CLI_PROVIDER_DEFAULTS["codex-cli"].knowledgeGraphModel },
+    "gemini-cli": { apiKey: "", baseURL: CLI_BRIDGE_BASE_URL, model: CLI_PROVIDER_DEFAULTS["gemini-cli"].model, knowledgeGraphModel: CLI_PROVIDER_DEFAULTS["gemini-cli"].knowledgeGraphModel },
+    "claude-cli": { apiKey: "", baseURL: CLI_BRIDGE_BASE_URL, model: CLI_PROVIDER_DEFAULTS["claude-cli"].model, knowledgeGraphModel: CLI_PROVIDER_DEFAULTS["claude-cli"].knowledgeGraphModel },
   })
   const [testState, setTestState] = useState<{ status: "idle" | "testing" | "success" | "error"; error?: string }>({
     status: "idle",
@@ -94,9 +117,9 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
   const activeConfig = providerConfigs[llmProvider]
   const showApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway" || llmProvider === "openai-compatible"
   const requiresApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway"
-  const requiresBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible"
-  const showBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible" || llmProvider === "aigateway"
-  const isLocalProvider = llmProvider === "ollama" || llmProvider === "openai-compatible"
+  const requiresBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible" || isCliBridgeProvider(llmProvider)
+  const showBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible" || llmProvider === "aigateway" || isCliBridgeProvider(llmProvider)
+  const isLocalProvider = llmProvider === "ollama" || llmProvider === "openai-compatible" || isCliBridgeProvider(llmProvider)
   const canTest =
     activeConfig.model.trim().length > 0 &&
     (!requiresApiKey || activeConfig.apiKey.trim().length > 0) &&
@@ -435,12 +458,19 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
       const baseURL = activeConfig.baseURL.trim() || undefined
       const model = activeConfig.model.trim()
       const knowledgeGraphModel = activeConfig.knowledgeGraphModel.trim() || undefined
+      const provider = isCliBridgeProvider(llmProvider)
+        ? {
+            flavor: "openai-compatible" as const,
+            baseURL: baseURL || CLI_BRIDGE_BASE_URL,
+            headers: CLI_PROVIDER_HEADERS[llmProvider],
+          }
+        : {
+            flavor: llmProvider,
+            apiKey,
+            baseURL,
+          }
       const providerConfig = {
-        provider: {
-          flavor: llmProvider,
-          apiKey,
-          baseURL,
-        },
+        provider,
         model,
         knowledgeGraphModel,
       }

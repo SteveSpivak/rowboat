@@ -166,6 +166,10 @@ const getBaseName = (path: string) => {
 
 const WIKI_LINK_TOKEN_REGEX = /\[\[([^[\]]+)\]\]/g
 const KNOWLEDGE_PREFIX = 'knowledge/'
+const EXTERNAL_SOURCES_PREFIX = 'knowledge/Sources'
+
+const isExternalKnowledgeSourcePath = (value: string | null | undefined) =>
+  Boolean(value) && (value === EXTERNAL_SOURCES_PREFIX || value!.startsWith(`${EXTERNAL_SOURCES_PREFIX}/`))
 
 const normalizeRelPathForWiki = (relPath: string) =>
   relPath.replace(/\\/g, '/').replace(/^\/+/, '')
@@ -1386,6 +1390,7 @@ function App() {
   useEffect(() => {
     const pathAtStart = editorPathRef.current
     if (!pathAtStart || !pathAtStart.endsWith('.md')) return
+    if (isExternalKnowledgeSourcePath(pathAtStart)) return
 
     const baseline = initialContentByPathRef.current.get(pathAtStart) ?? initialContentRef.current
     if (debouncedContent === baseline) return
@@ -1517,7 +1522,10 @@ function App() {
 
   // Close version history panel when switching files
   useEffect(() => {
-    if (versionHistoryPath && selectedPath !== versionHistoryPath) {
+    if (
+      versionHistoryPath
+      && (selectedPath !== versionHistoryPath || isExternalKnowledgeSourcePath(versionHistoryPath))
+    ) {
       setVersionHistoryPath(null)
       setViewingHistoricalVersion(null)
     }
@@ -3243,7 +3251,7 @@ function App() {
 
     // Top-level knowledge folders (except Notes) open as a bases view with folder filter
     const parts = path.split('/')
-    if (parts.length === 2 && parts[0] === 'knowledge' && parts[1] !== 'Notes') {
+    if (parts.length === 2 && parts[0] === 'knowledge' && parts[1] !== 'Notes' && parts[1] !== 'Sources') {
       const folderName = parts[1]
       const folderCfg = FOLDER_BASE_CONFIGS[folderName]
       setBaseConfigByPath((prev) => ({
@@ -3345,6 +3353,9 @@ function App() {
 
   const knowledgeActions = React.useMemo(() => ({
     createNote: async (parentPath: string = 'knowledge/Notes') => {
+      if (isExternalKnowledgeSourcePath(parentPath)) {
+        throw new Error('External knowledge sources are read-only')
+      }
       try {
         let index = 0
         let name = untitledBaseName
@@ -3368,6 +3379,9 @@ function App() {
       }
     },
     createFolder: async (parentPath: string = 'knowledge/Notes') => {
+      if (isExternalKnowledgeSourcePath(parentPath)) {
+        throw new Error('External knowledge sources are read-only')
+      }
       try {
         await window.ipc.invoke('workspace:mkdir', {
           path: `${parentPath}/new-folder-${Date.now()}`,
@@ -3396,6 +3410,9 @@ function App() {
     expandAll: () => setExpandedPaths(new Set(collectDirPaths(tree))),
     collapseAll: () => setExpandedPaths(new Set()),
     rename: async (oldPath: string, newName: string, isDir: boolean) => {
+      if (isExternalKnowledgeSourcePath(oldPath)) {
+        throw new Error('External knowledge sources are read-only')
+      }
       try {
         const parts = oldPath.split('/')
         // For files, ensure .md extension
@@ -3447,6 +3464,9 @@ function App() {
       }
     },
     remove: async (path: string) => {
+      if (isExternalKnowledgeSourcePath(path)) {
+        throw new Error('External knowledge sources are read-only')
+      }
       try {
         await window.ipc.invoke('workspace:remove', { path, opts: { trash: true } })
         if (path.endsWith('.md')) {
@@ -4101,7 +4121,7 @@ function App() {
                     onCloseTab={closeChatTab}
                   />
                 )}
-                {selectedPath && selectedPath.endsWith('.md') && (
+                {selectedPath && selectedPath.endsWith('.md') && !isExternalKnowledgeSourcePath(selectedPath) && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground self-center shrink-0 pl-2">
                     {isSaving ? (
                       <>
@@ -4116,7 +4136,12 @@ function App() {
                     ) : null}
                   </div>
                 )}
-                {selectedPath && selectedPath.startsWith('knowledge/') && selectedPath.endsWith('.md') && (
+                {selectedPath && isExternalKnowledgeSourcePath(selectedPath) && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground self-center shrink-0 pl-2">
+                    <span>Read-only source</span>
+                  </div>
+                )}
+                {selectedPath && selectedPath.startsWith('knowledge/') && selectedPath.endsWith('.md') && !isExternalKnowledgeSourcePath(selectedPath) && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -4229,6 +4254,7 @@ function App() {
                           ? tab.id === activeFileTabId || tab.path === selectedPath
                           : tab.path === selectedPath
                         const isViewingHistory = viewingHistoricalVersion && isActive && versionHistoryPath === tab.path
+                        const isReadOnlySource = isExternalKnowledgeSourcePath(tab.path)
                         const tabContent = isViewingHistory
                           ? viewingHistoricalVersion.content
                           : editorContentByPath[tab.path]
@@ -4246,7 +4272,7 @@ function App() {
                             <MarkdownEditor
                               content={tabContent}
                               notePath={tab.path}
-                              onChange={(markdown) => { if (!isViewingHistory) handleEditorChange(tab.path, markdown) }}
+                              onChange={(markdown) => { if (!isViewingHistory && !isReadOnlySource) handleEditorChange(tab.path, markdown) }}
                               onPrimaryHeadingCommit={() => {
                                 untitledRenameReadyPathsRef.current.add(tab.path)
                               }}
@@ -4256,7 +4282,7 @@ function App() {
                               onImageUpload={handleImageUpload}
                               editorSessionKey={editorSessionByTabId[tab.id] ?? 0}
                               frontmatter={frontmatterByPathRef.current.get(tab.path) ?? null}
-                              onFrontmatterChange={(newRaw) => {
+                              onFrontmatterChange={isReadOnlySource || isViewingHistory ? undefined : (newRaw) => {
                                 frontmatterByPathRef.current.set(tab.path, newRaw)
                                 // Write updated frontmatter to disk immediately
                                 const currentBody = editorContentRef.current
@@ -4276,7 +4302,7 @@ function App() {
                                   fileHistoryHandlersRef.current.delete(tab.id)
                                 }
                               }}
-                              editable={!isViewingHistory}
+                              editable={!isViewingHistory && !isReadOnlySource}
                               onExport={async (format) => {
                                 const markdown = tabContent
                                 const title = getBaseName(tab.path)

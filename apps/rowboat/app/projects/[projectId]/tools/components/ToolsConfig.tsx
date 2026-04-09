@@ -86,6 +86,16 @@ export function ToolsConfig({
             />
           </div>
         </Tab>
+        <Tab key="connectors" title="CLI Connectors">
+          <div className="mt-4 p-6">
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-sm text-gray-700 dark:text-gray-300">
+              <div className="font-medium text-gray-900 dark:text-gray-100">Model connectors</div>
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Connectors like Codex CLI, Gemini CLI, Claude CLI, and Ollama are selected per agent in the workflow editor.
+              </div>
+            </div>
+          </div>
+        </Tab>
         {!useBilling && <Tab key="webhook" title="Webhook">
           <div className="mt-4 p-6">
             <AddWebhookTool

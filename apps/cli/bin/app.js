@@ -23,18 +23,23 @@ yargs(hideBin(process.argv))
                 type: "string",
                 description: "The input to the agent",
             })
-            .option("no-interactive", {
+            .option("interactive", {
                 type: "boolean",
-                description: "Do not interact with the user",
-                default: false,
+                description: "Interact with the user",
+                default: true,
             }),
-        (argv) => {
-            app({
-                agent: argv.agent,
-                runId: argv.run_id,
-                input: argv.input,
-                noInteractive: argv.noInteractive,
-            });
+        async (argv) => {
+            try {
+                await app({
+                    agent: argv.agent,
+                    runId: argv.run_id,
+                    input: argv.input,
+                    noInteractive: argv.interactive === false,
+                });
+            } catch (error) {
+                console.error(error?.stack ?? error?.message ?? error);
+                process.exit(1);
+            }
         }
     )
     .command(

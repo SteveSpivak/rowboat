@@ -70,6 +70,40 @@ export function createProvider(config: z.infer<typeof Provider>): ProviderV2 {
     }
 }
 
+function hasExplicitProviderConfig(config: z.infer<typeof Provider>): boolean {
+    return Boolean(
+        config.apiKey?.trim()
+        || config.baseURL?.trim()
+        || (config.headers && Object.keys(config.headers).length > 0),
+    );
+}
+
+export function shouldUseGatewayProvider(config: z.infer<typeof Provider>, signedIn: boolean): boolean {
+    if (!signedIn) return false;
+    if (config.flavor === "aigateway") return true;
+    if (hasExplicitProviderConfig(config)) return false;
+    return config.flavor === "openai"
+        || config.flavor === "anthropic"
+        || config.flavor === "google";
+}
+
+export async function resolveProvider(config: z.infer<typeof Provider>): Promise<{ provider: ProviderV2; signedIn: boolean; usingGateway: boolean }> {
+    const signedIn = await isSignedIn();
+    if (shouldUseGatewayProvider(config, signedIn)) {
+        return {
+            provider: await getGatewayProvider(),
+            signedIn,
+            usingGateway: true,
+        };
+    }
+
+    return {
+        provider: createProvider(config),
+        signedIn,
+        usingGateway: false,
+    };
+}
+
 export async function testModelConnection(
     providerConfig: z.infer<typeof Provider>,
     model: string,
@@ -80,9 +114,7 @@ export async function testModelConnection(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
     try {
-        const provider = await isSignedIn()
-            ? await getGatewayProvider()
-            : createProvider(providerConfig);
+        const { provider } = await resolveProvider(providerConfig);
         const languageModel = provider.languageModel(model);
         await generateText({
             model: languageModel,

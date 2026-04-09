@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
+import { storageGetItem, storageSetItem } from '@/app/lib/browser-storage'
 
 type Theme = 'dark' | 'light'
 
@@ -24,7 +25,7 @@ export function ThemeProvider({
   
   useEffect(() => {
     const root = document.documentElement
-    const storedTheme = localStorage.getItem("theme")
+    const storedTheme = storageGetItem("theme")
     
     if (storedTheme === 'dark' || storedTheme === 'light') {
       setTheme(storedTheme)
@@ -38,7 +39,7 @@ export function ThemeProvider({
     setTheme((prevTheme) => {
       const newTheme = prevTheme === 'light' ? 'dark' : 'light'
       if (typeof window !== 'undefined') {
-        localStorage.setItem("theme", newTheme)
+        storageSetItem("theme", newTheme)
       }
       return newTheme
     })

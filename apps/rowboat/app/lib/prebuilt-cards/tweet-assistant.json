@@ -4,7 +4,7 @@
       "name": "Tweet Assistant",
       "type": "conversation",
       "description": "Assists users in creating and posting tweets, including crafting tweet text, finding information, and posting to Twitter.",
-      "instructions": "## 🧑‍💼 Role:\nYou are a helpful assistant that helps users create and post tweets. You can assist with crafting the tweet text, finding information, and finally posting the tweet to Twitter.\n\n---\n## ⚙️ Operating Procedure:\n1. Greet the user and ask for the text they want to include in the tweet. Offer to help them craft it or find information about a topic.\n2. If the user asks for help with a topic, use [@tool:Composio DuckDuckGo Search](#mention) and [@tool:Exa Answer](#mention) to find relevant information and present it to the user.\n3. Once the tweet text is finalized, confirm with the user that they are ready to post it.\n4. Use [@tool:Create a post](#mention) with the tweet text to post the tweet to Twitter.\n5. Inform the user when the tweet has been successfully posted.\n\n---\n## 🎯 Scope:\n✅ In Scope:\n- Interacting with the user to get tweet text.\n- Offering assistance in crafting tweets and finding information.\n- Posting tweets to Twitter.\n\n---\n## 📋 Guidelines:\n✔️ Dos:\n- Always confirm the tweet text with the user before posting.\n- Be proactive in offering help and suggestions for tweet content.\n- Ensure the tweet text is correctly posted.\n\n🚫 Don'ts:\n- Do not fabricate information.\n",
+      "instructions": "## 🧑‍💼 Role:\nYou are a helpful assistant that helps users create and post tweets. You can assist with crafting the tweet text, finding information, and finally posting to X/Twitter through the project's configured webhook router.\n\n---\n## ⚙️ Operating Procedure:\n1. Greet the user and ask for the text they want to include in the tweet. Offer to help them craft it or find information about a topic.\n2. If the user asks for help with a topic, use [@tool:Search Web](#mention) and [@tool:Answer Question](#mention) to find relevant information and present it to the user.\n3. Once the tweet text is finalized, confirm with the user that they are ready to post it.\n4. Before posting, make sure the project webhook is configured and reachable. If the webhook returns a setup or credential error, explain the missing `n8n` or X/Twitter configuration clearly and stop.\n5. Use [@tool:Create a post](#mention) with the tweet text to post the tweet.\n6. Inform the user when the tweet has been successfully posted.\n\n---\n## 🎯 Scope:\n✅ In Scope:\n- Interacting with the user to get tweet text.\n- Offering assistance in crafting tweets and finding information.\n- Posting tweets through the project's configured webhook flow.\n\n---\n## 📋 Guidelines:\n✔️ Dos:\n- Always confirm the tweet text with the user before posting.\n- Be proactive in offering help and suggestions for tweet content.\n- If the local webhook or downstream X/Twitter step is not configured, explain that clearly instead of pretending the post succeeded.\n\n🚫 Don'ts:\n- Do not fabricate information.\n",
       "examples": "\n",
       "model": "",
       "toggleAble": true,
@@ -18,7 +18,7 @@
   "tools": [
     {
       "name": "Create a post",
-      "description": "Creates a tweet on twitter; `text` is required unless `card uri`, `media media ids`, `poll options`, or `quote tweet id` is provided.",
+      "description": "Creates a tweet through the project's configured webhook router. `text` is optional for card, media, poll, and quote-tweet flows.",
       "mockTool": false,
       "parameters": {
         "type": "object",
@@ -66,7 +66,6 @@
               ]
             ],
             "items": {
-              "properties": {},
               "type": "string"
             },
             "title": "Media  Media  Ids",
@@ -81,7 +80,6 @@
               ]
             ],
             "items": {
-              "properties": {},
               "type": "string"
             },
             "title": "Media  Tagged  User  Ids",
@@ -98,7 +96,7 @@
             "type": "boolean"
           },
           "poll__duration__minutes": {
-            "description": "Poll duration in minutes (5-10080). Required if `poll_options` are provided. Mutually exclusive with `card_uri`.",
+            "description": "Poll duration in minutes (5-10080). Required if `poll__options` are provided. Mutually exclusive with `card_uri`.",
             "examples": [
               "60",
               "1440",
@@ -121,7 +119,6 @@
               ]
             ],
             "items": {
-              "properties": {},
               "type": "string"
             },
             "title": "Poll  Options",
@@ -150,7 +147,7 @@
             "type": "string"
           },
           "reply__exclude__reply__user__ids": {
-            "description": "User IDs to exclude from @mentioning in the reply; these users will not be notified. Used when `reply_in_reply_to_tweet_id` is set.",
+            "description": "User IDs to exclude from @mentioning in the reply; these users will not be notified. Used when `reply__in__reply__to__tweet__id` is set.",
             "examples": [
               [
                 "123456789",
@@ -158,7 +155,6 @@
               ]
             ],
             "items": {
-              "properties": {},
               "type": "string"
             },
             "title": "Reply  Exclude  Reply  User  Ids",
@@ -189,64 +185,51 @@
             "type": "string"
           },
           "text": {
-            "description": "Text content of the Tweet (max 280 characters). Required unless `card_uri`, `media_media_ids`, `poll_options`, or `quote_tweet_id` are provided.",
+            "description": "Text content of the Tweet (max 280 characters). Optional when `card_uri`, `media__media__ids`, `poll__options`, or `quote_tweet_id` are provided.",
             "examples": [
               "Hello world!",
               "Check out this cool new feature! #innovation"
             ],
+            "maxLength": 280,
             "title": "Text",
             "type": "string"
           }
         },
         "required": []
       },
-      "isComposio": true,
-      "composioData": {
-        "slug": "TWITTER_CREATION_OF_A_POST",
-        "noAuth": false,
-        "toolkitName": "twitter",
-        "toolkitSlug": "twitter",
-        "logo": "https://cdn.jsdelivr.net/gh/ComposioHQ/open-logos@master/twitter.png"
-      }
+      "isWebhook": true
     },
     {
-      "name": "Exa Answer",
-      "description": "Get answers with citations using the exa api.",
+      "name": "Answer Question",
+      "description": "Answer a research question using the project's configured webhook router.",
       "mockTool": false,
       "parameters": {
         "type": "object",
         "properties": {
-          "content": {
-            "description": "The user message content for the Exa answer API.",
+          "question": {
+            "description": "The research question to answer through the project's configured webhook router.",
             "examples": [
               "give me image of narendra modi"
             ],
-            "title": "Content",
+            "title": "Question",
             "type": "string"
           }
         },
         "required": [
-          "content"
+          "question"
         ]
       },
-      "isComposio": true,
-      "composioData": {
-        "slug": "COMPOSIO_SEARCH_EXA_ANSWER",
-        "noAuth": true,
-        "toolkitName": "composio_search",
-        "toolkitSlug": "composio_search",
-        "logo": "https://cdn.jsdelivr.net/gh/ComposioHQ/open-logos@master//composio-logo.png"
-      }
+      "isWebhook": true
     },
     {
-      "name": "Composio DuckDuckGo Search",
-      "description": "The duckduckgosearch class utilizes the composio duckduckgo search api to perform searches, focusing on web information and details. it leverages the duckduckgo search engine via the composio duckduckgo search api to retrieve relevant web data based on the provided query.",
+      "name": "Search Web",
+      "description": "Search the web using the project's configured webhook router.",
       "mockTool": false,
       "parameters": {
         "type": "object",
         "properties": {
           "query": {
-            "description": "The search query for the Composio DuckDuckGo Search API, specifying the search topic.",
+            "description": "The web search query to send through the project's configured webhook router.",
             "examples": [
               "Python programming"
             ],
@@ -258,14 +241,7 @@
           "query"
         ]
       },
-      "isComposio": true,
-      "composioData": {
-        "slug": "COMPOSIO_SEARCH_DUCK_DUCK_GO_SEARCH",
-        "noAuth": true,
-        "toolkitName": "Composio search",
-        "toolkitSlug": "composio_search",
-        "logo": "https://cdn.jsdelivr.net/gh/ComposioHQ/open-logos@master//composio-logo.png"
-      }
+      "isWebhook": true
     }
   ],
   "pipelines": [],

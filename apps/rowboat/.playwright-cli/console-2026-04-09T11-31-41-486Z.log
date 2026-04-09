@@ -1,0 +1,28 @@
+[     369ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:16383
+[     562ms] [LOG] [Fast Refresh] done in NaNms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[     873ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[     965ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/projects:0
+[     965ms] [LOG] [Fast Refresh] done in 194ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[     975ms] [ERROR] Error fetching projects: MongoTopologyClosedError: Topology is closed
+    at MongoDBProjectMembersRepository.findByUserId (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?8:4328:10)
+    at MongodbProjectsRepository.listProjects (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?9:4561:65)
+    at ListProjectsUseCase.execute (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?10:11773:46)
+    at ListProjectsController.execute (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?11:11801:47)
+    at listProjects (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/app_097aff48._.js?12:1521:53)
+    at resolveErrorDev (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17579:48)
+    at processFullStringRow (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17795:23)
+    at processFullBinaryRow (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17783:9)
+    at progress (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17929:102) @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:1225
+[    1348ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[    1432ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/projects:0
+[    1433ms] [LOG] [Fast Refresh] done in 185ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[    1440ms] [ERROR] Error fetching projects: MongoTopologyClosedError: Topology is closed
+    at MongoDBProjectMembersRepository.findByUserId (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?8:4328:10)
+    at MongodbProjectsRepository.listProjects (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?9:4561:65)
+    at ListProjectsUseCase.execute (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?10:11773:46)
+    at ListProjectsController.execute (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/src_9c779d57._.js?11:11801:47)
+    at listProjects (rsc://React/Server/file:///Users/steve.spivak/agent-workspace/rowboatlabs/rowboat/apps/rowboat/.next/server/chunks/ssr/app_097aff48._.js?12:1521:53)
+    at resolveErrorDev (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17579:48)
+    at processFullStringRow (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17795:23)
+    at processFullBinaryRow (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17783:9)
+    at progress (http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17929:102) @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:1225

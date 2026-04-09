@@ -1,0 +1,27 @@
+[     905ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:16383
+[    1122ms] [LOG] [Fast Refresh] done in NaNms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[    1299ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[    3053ms] [LOG] [Fast Refresh] done in 1856ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[  106216ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[  108437ms] [LOG] [Fast Refresh] done in 2322ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[  112534ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[  113910ms] [ERROR] ./app/actions/assistant-templates.actions.ts:6:1
+Module not found: Can't resolve '@/app/lib/prebuilt-cards'
+  4 | import { authCheck } from "./auth.actions";
+  5 | import { MongoDBAssistantTemplatesRepository } from '@/src/infrastructure/repositories/mongodb.assistant-templates.repository';
+> 6 | import { prebuiltTemplates } from '@/app/lib/prebuilt-cards';
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  7 | import { USE_AUTH } from '@/app/lib/feature_flags';
+  8 | // import { ensureLibraryTemplatesSeeded } from '@/app/lib/assistant_templates_seed';
+  9 |
+
+Import map: aliased to relative './app/lib/prebuilt-cards' inside of [project]/
+
+https://nextjs.org/docs/messages/module-not-found @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:1225
+[  126526ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[  127729ms] [LOG] [Fast Refresh] done in 1304ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[  127922ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[  128251ms] [LOG] [Fast Refresh] done in 429ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[  137372ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027
+[  140070ms] [LOG] [Fast Refresh] done in 2729ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:14891
+[  146295ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:15027

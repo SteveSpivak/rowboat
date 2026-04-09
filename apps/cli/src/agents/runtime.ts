@@ -12,7 +12,6 @@ import { MessageEvent, AskHumanRequestEvent, RunEvent, ToolInvocationEvent, Tool
 import { BuiltinTools } from "../application/lib/builtin-tools.js";
 import { CopilotAgent } from "../application/assistant/agent.js";
 import { isBlocked } from "../application/lib/command-executor.js";
-import container from "../di/container.js";
 import { IModelConfigRepo } from "../models/repo.js";
 import { getProvider } from "../models/models.js";
 import { IAgentsRepo } from "./repo.js";
@@ -265,6 +264,7 @@ export async function loadAgent(id: string): Promise<z.infer<typeof Agent>> {
     if (id === "copilot" || id === "rowboatx") {
         return CopilotAgent;
     }
+    const { default: container } = await import("../di/container.js");
     const repo = container.resolve<IAgentsRepo>('agentsRepo');
     return await repo.fetch(id);
 }
@@ -766,6 +766,10 @@ async function* streamLlm(
     for await (const event of fullStream) {
         // console.log("\n\n\t>>>>\t\tstream event", JSON.stringify(event));
         switch (event.type) {
+            case "error":
+                throw event.error instanceof Error
+                    ? event.error
+                    : new Error(typeof event.error === "string" ? event.error : JSON.stringify(event.error));
             case "reasoning-start":
                 yield {
                     type: "reasoning-start",

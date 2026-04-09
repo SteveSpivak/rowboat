@@ -26,13 +26,16 @@ interface LlmSetupStepProps {
 }
 
 const primaryProviders: Array<{ id: LlmProviderFlavor; name: string; description: string; color: string; icon: React.ReactNode }> = [
-  { id: "openai", name: "OpenAI", description: "GPT models", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: <OpenAIIcon /> },
-  { id: "anthropic", name: "Anthropic", description: "Claude models", color: "bg-orange-500/10 text-orange-600 dark:text-orange-400", icon: <AnthropicIcon /> },
-  { id: "google", name: "Gemini", description: "Google AI Studio", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400", icon: <GoogleIcon /> },
+  { id: "codex-cli", name: "Codex CLI", description: "Primary CLI backend", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: <OpenAIIcon /> },
+  { id: "gemini-cli", name: "Gemini CLI", description: "Google Gemini via CLI", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400", icon: <GoogleIcon /> },
+  { id: "claude-cli", name: "Claude CLI", description: "Anthropic Claude via CLI", color: "bg-orange-500/10 text-orange-600 dark:text-orange-400", icon: <AnthropicIcon /> },
   { id: "ollama", name: "Ollama", description: "Local models", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400", icon: <OllamaIcon /> },
 ]
 
 const moreProviders: Array<{ id: LlmProviderFlavor; name: string; description: string; color: string; icon: React.ReactNode }> = [
+  { id: "openai", name: "OpenAI", description: "Direct API access", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: <OpenAIIcon /> },
+  { id: "anthropic", name: "Anthropic", description: "Direct Claude API", color: "bg-orange-500/10 text-orange-600 dark:text-orange-400", icon: <AnthropicIcon /> },
+  { id: "google", name: "Gemini API", description: "Google AI Studio", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400", icon: <GoogleIcon /> },
   { id: "openrouter", name: "OpenRouter", description: "Multiple models, one key", color: "bg-pink-500/10 text-pink-600 dark:text-pink-400", icon: <OpenRouterIcon /> },
   { id: "aigateway", name: "AI Gateway", description: "Vercel AI Gateway", color: "bg-sky-500/10 text-sky-600 dark:text-sky-400", icon: <VercelIcon /> },
   { id: "openai-compatible", name: "OpenAI-Compatible", description: "Custom endpoint", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400", icon: <GenericApiIcon /> },
@@ -48,6 +51,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
   } = state
 
   const isMoreProvider = moreProviders.some(p => p.id === llmProvider)
+  const isCliBridgeProvider = llmProvider === "codex-cli" || llmProvider === "gemini-cli" || llmProvider === "claude-cli"
   const modelsForProvider = modelsCatalog[llmProvider] || []
   const showModelInput = isLocalProvider || modelsForProvider.length === 0
 
@@ -90,7 +94,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
         Choose your model
       </h2>
       <p className="text-base text-muted-foreground text-center mb-6">
-        Select a provider and configure your API key
+        Use a CLI bridge, a local runtime, or a direct API provider
       </p>
 
       {/* Inline Rowboat upsell callout */}
@@ -241,7 +245,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
         {showBaseURL && (
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
-              Base URL
+              {isCliBridgeProvider ? "CLI bridge URL" : "Base URL"}
             </label>
             <Input
               value={activeConfig.baseURL}
@@ -249,6 +253,8 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
               placeholder={
                 llmProvider === "ollama"
                   ? "http://localhost:11434"
+                  : isCliBridgeProvider
+                    ? "http://127.0.0.1:8766/v1"
                   : llmProvider === "openai-compatible"
                     ? "http://localhost:1234/v1"
                     : "https://ai-gateway.vercel.sh/v1"

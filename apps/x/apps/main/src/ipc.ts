@@ -24,7 +24,7 @@ import { RunEvent } from '@x/shared/dist/runs.js';
 import { ServiceEvent } from '@x/shared/dist/service-events.js';
 import container from '@x/core/dist/di/container.js';
 import { listOnboardingModels } from '@x/core/dist/models/models-dev.js';
-import { testModelConnection } from '@x/core/dist/models/models.js';
+import { shouldUseGatewayProvider, testModelConnection } from '@x/core/dist/models/models.js';
 import { isSignedIn } from '@x/core/dist/account/account.js';
 import { listGatewayModels } from '@x/core/dist/models/gateway.js';
 import type { IModelConfigRepo } from '@x/core/dist/models/repo.js';
@@ -446,7 +446,9 @@ export function setupIpcHandlers() {
       return { success: true };
     },
     'models:list': async () => {
-      if (await isSignedIn()) {
+      const repo = container.resolve<IModelConfigRepo>('modelConfigRepo');
+      const config = await repo.getConfig();
+      if (shouldUseGatewayProvider(config.provider, await isSignedIn())) {
         return await listGatewayModels();
       }
       return await listOnboardingModels();

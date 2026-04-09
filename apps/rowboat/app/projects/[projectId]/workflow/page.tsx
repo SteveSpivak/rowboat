@@ -7,6 +7,7 @@ import { container } from "@/di/container";
 import { getEligibleModels } from "@/app/lib/billing";
 import { ModelsResponse } from "@/app/lib/types/billing_types";
 import { requireAuth } from "@/app/lib/auth";
+import { fetchLocalConnectorModels } from "@/app/lib/local-connectors";
 import { IFetchProjectController } from "@/src/interface-adapters/controllers/projects/fetch-project.controller";
 import { IListDataSourcesController } from "@/src/interface-adapters/controllers/data-sources/list-data-sources.controller";
 import { IListScheduledJobRulesController } from "@/src/interface-adapters/controllers/scheduled-job-rules/list-scheduled-job-rules.controller";
@@ -75,6 +76,17 @@ export default async function Page(
     let eligibleModels: z.infer<typeof ModelsResponse> | "*" = '*';
     if (USE_BILLING) {
         eligibleModels = await getEligibleModels(customer.id);
+    } else {
+        const localModels = await fetchLocalConnectorModels();
+        if (localModels.length > 0) {
+            eligibleModels = {
+                agentModels: localModels.map((model) => ({
+                    name: model.id,
+                    eligible: true,
+                    plan: 'free' as const,
+                })),
+            };
+        }
     }
 
     const triggers = transformTriggersForCopilot({

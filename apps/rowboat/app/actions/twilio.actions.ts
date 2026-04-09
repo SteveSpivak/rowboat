@@ -3,11 +3,14 @@
 import { TwilioConfigParams, TwilioConfigResponse, TwilioConfig, InboundConfigResponse } from "../lib/types/voice_types";
 import { twilioConfigsCollection } from "../lib/mongodb";
 import { ObjectId } from "mongodb";
-import twilio from 'twilio';
-import { Twilio } from 'twilio';
 import { z } from "zod";
 import { WithStringId } from "../lib/types/types";
 import { projectAuthCheck } from "./project.actions";
+
+async function getTwilioFactory() {
+    const twilioModule = await import('twilio');
+    return (twilioModule.default || twilioModule) as (...args: string[]) => any;
+}
 
 // Helper function to serialize MongoDB documents
 function serializeConfig(config: any) {
@@ -23,6 +26,7 @@ export async function configureTwilioNumber(params: z.infer<typeof TwilioConfigP
     await projectAuthCheck(params.project_id);
     console.log('configureTwilioNumber - Received params:', params);
     try {
+        const twilio = await getTwilioFactory();
         const client = twilio(params.account_sid, params.auth_token);
         
         try {
@@ -200,7 +204,8 @@ async function configureInboundCall(
         });
 
         // Initialize Twilio client
-        const client = new Twilio(account_sid, auth_token);
+        const twilio = await getTwilioFactory();
+        const client = twilio(account_sid, auth_token);
 
         // Find the phone number in Twilio account
         const incomingPhoneNumbers = await client.incomingPhoneNumbers.list({ phoneNumber: phone_number });

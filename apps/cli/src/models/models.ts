@@ -7,7 +7,6 @@ import { createOllama } from "ollama-ai-provider-v2";
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { IModelConfigRepo } from "./repo.js";
-import container from "../di/container.js";
 import z from "zod";
 
 export const Flavor = z.enum([
@@ -40,6 +39,7 @@ const providerMap: Record<string, ProviderV2> = {};
 
 export async function getProvider(name: string = ""): Promise<ProviderV2> {
     // get model conf
+    const { default: container } = await import("../di/container.js");
     const repo = container.resolve<IModelConfigRepo>("modelConfigRepo");
     const modelConfig = await repo.getConfig();
     if (!modelConfig) {

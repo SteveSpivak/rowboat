@@ -15,6 +15,7 @@ import { listScheduledJobRules } from "@/app/actions/scheduled-job-rules.actions
 import { listRecurringJobRules } from "@/app/actions/recurring-job-rules.actions";
 import { listComposioTriggerDeployments } from "@/app/actions/composio.actions";
 import { transformTriggersForCopilot, DEFAULT_TRIGGER_FETCH_LIMIT } from "./trigger-transform";
+import { storageGetItem, storageSetItem } from "@/app/lib/browser-storage";
 
 export function App({
     initialProjectData,
@@ -40,13 +41,11 @@ export function App({
     chatWidgetHost: string;
 }) {
     const [mode, setMode] = useState<'draft' | 'live'>(() => {
-        if (typeof window === 'undefined') return 'draft';
-        const stored = window.localStorage.getItem(`workflow_mode_${initialProjectData.id}`);
+        const stored = storageGetItem(`workflow_mode_${initialProjectData.id}`);
         return stored === 'live' || stored === 'draft' ? stored : 'draft';
     });
     const [autoPublishEnabled, setAutoPublishEnabled] = useState(() => {
-        if (typeof window === 'undefined') return true; // Default to auto-publish
-        const stored = window.localStorage.getItem(`auto_publish_${initialProjectData.id}`);
+        const stored = storageGetItem(`auto_publish_${initialProjectData.id}`);
         return stored !== null ? stored === 'true' : true;
     });
     const [project, setProject] = useState<z.infer<typeof Project>>(initialProjectData);
@@ -58,9 +57,7 @@ export function App({
 
     const handleToggleAutoPublish = (enabled: boolean) => {
         setAutoPublishEnabled(enabled);
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem(`auto_publish_${initialProjectData.id}`, enabled.toString());
-        }
+        storageSetItem(`auto_publish_${initialProjectData.id}`, enabled.toString());
     };
 
     // choose which workflow to display
@@ -151,9 +148,7 @@ export function App({
 
     function handleSetMode(mode: 'draft' | 'live') {
         try {
-            if (typeof window !== 'undefined') {
-                window.localStorage.setItem(`workflow_mode_${initialProjectData.id}`, mode);
-            }
+            storageSetItem(`workflow_mode_${initialProjectData.id}`, mode);
         } catch {}
         setMode(mode);
         // Reload data to ensure we have the latest workflow data for the current mode

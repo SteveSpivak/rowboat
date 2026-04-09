@@ -2,8 +2,16 @@
 import { useUser } from '@auth0/nextjs-auth0';
 import { Avatar, Dropdown, DropdownItem, DropdownSection, DropdownTrigger, DropdownMenu } from "@heroui/react";
 import { useRouter } from 'next/navigation';
+import { USE_AUTH } from '@/app/lib/feature_flags';
 
 export function UserButton({ useBilling, collapsed }: { useBilling?: boolean, collapsed?: boolean }) {
+    if (!USE_AUTH) {
+        return null;
+    }
+    return <UserButtonWithAuth useBilling={useBilling} collapsed={collapsed} />;
+}
+
+function UserButtonWithAuth({ useBilling, collapsed }: { useBilling?: boolean, collapsed?: boolean }) {
     const router = useRouter();
     const { user } = useUser();
     if (!user) {

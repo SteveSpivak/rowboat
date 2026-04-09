@@ -5,6 +5,7 @@ import { Modal, ModalContent, ModalHeader, ModalBody } from '@heroui/react';
 import { ToolsConfig } from '../../tools/components/ToolsConfig';
 import { z } from 'zod';
 import { Workflow, WorkflowTool } from '@/app/lib/types/workflow_types';
+import { USE_COMPOSIO_TOOLS } from '@/app/lib/feature_flags';
 
 interface ToolsModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ export function ToolsModal({
         </ModalHeader>
         <ModalBody>
           <ToolsConfig
-            useComposioTools={true}
+            useComposioTools={USE_COMPOSIO_TOOLS}
             projectId={projectId}
             tools={tools}
             onAddTool={handleAddTool}

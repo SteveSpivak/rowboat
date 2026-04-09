@@ -5,8 +5,9 @@ This directory contains JSON files that define prebuilt assistant templates. The
 ## How to Add New Prebuilt Cards
 
 1. Create a new JSON file in this directory (e.g., `my-assistant.json`)
-2. The filename (without extension) will be used as the template key
+2. The filename (without extension) is the canonical template key
 3. The JSON file should follow the WorkflowTemplate schema structure
+4. If you want older display-name links to keep working, add an alias entry in `index.ts`
 
 ## Required Structure
 
@@ -24,7 +25,7 @@ Each prebuilt card JSON file must have:
 
 See the existing files in this directory:
 - `github-data-to-spreadsheet.json` - Fetches GitHub stats and logs to Google Sheets
-- `Meeting Prep Assistant.json` - Research meeting attendees and send to Slack
+- `meeting-prep-assistant.json` - Research meeting attendees and send to Slack
 - `interview-scheduler.json` - Automate interview scheduling with Google Sheets/Calendar
 
 ## Template Loading
@@ -37,8 +38,9 @@ This directory is located at `app/lib/prebuilt-cards/` to keep the template defi
 
 ## Validation
 
-The system validates that each template has:
+The system validates or normalizes that each template has:
 - A valid `agents` array
 - Proper JSON syntax
+- Canonical prebuilt-template lookup through the registry in `index.ts`
 
 Invalid templates will be logged as warnings but won't break the application.

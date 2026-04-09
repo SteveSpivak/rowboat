@@ -11,7 +11,7 @@ const ModelsDevModel = z.object({
   name: z.string().optional(),
   release_date: z.string().optional(),
   tool_call: z.boolean().optional(),
-  experimental: z.boolean().optional(),
+  experimental: z.union([z.boolean(), z.record(z.string(), z.unknown())]).optional(),
   status: z.enum(["alpha", "beta", "deprecated"]).optional(),
 }).passthrough();
 
@@ -125,7 +125,8 @@ function pickProvider(
 }
 
 function isStableModel(model: z.infer<typeof ModelsDevModel>): boolean {
-  if (model.experimental) return false;
+  if (model.experimental === true) return false;
+  if (typeof model.experimental === "object" && model.experimental !== null) return false;
   if (model.status && ["alpha", "beta", "deprecated"].includes(model.status)) return false;
   return true;
 }

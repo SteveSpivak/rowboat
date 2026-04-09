@@ -5,6 +5,7 @@ import { WorkDir } from '../config/config.js';
 import { WorkspaceChangeEvent } from 'packages/shared/dist/workspace.js';
 import z from 'zod';
 import { Stats } from 'node:fs';
+import { listExternalMounts } from './external_sources.js';
 
 export type WorkspaceChangeCallback = (event: z.infer<typeof WorkspaceChangeEvent>) => void;
 
@@ -21,7 +22,7 @@ export async function createWorkspaceWatcher(
 ): Promise<FSWatcher> {
   await ensureWorkspaceRoot();
 
-  const watcher = chokidar.watch(WorkDir, {
+  const watcher = chokidar.watch([WorkDir, ...listExternalMounts().map((mount) => mount.sourcePath)], {
     ignoreInitial: true,
     awaitWriteFinish: {
       stabilityThreshold: 150,
@@ -74,4 +75,3 @@ export async function createWorkspaceWatcher(
 
   return watcher;
 }
-

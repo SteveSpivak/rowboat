@@ -11,10 +11,15 @@ import { z } from "zod";
 import { listDataSources } from "../../../../actions/data-source.actions";
 import { Panel } from "@/components/common/panel-common";
 import { PlusIcon } from "lucide-react";
+import { LOCAL_KNOWLEDGE_ROOTS } from "@/app/lib/local-knowledge-roots";
+import { importLocalKnowledgeRoot } from "@/app/actions/local-knowledge.actions";
 
 export function SourcesList({ projectId }: { projectId: string }) {
     const [sources, setSources] = useState<z.infer<typeof DataSource>[]>([]);
     const [loading, setLoading] = useState(true);
+    const [importingRootId, setImportingRootId] = useState<string | null>(null);
+    const [importMessage, setImportMessage] = useState<string | null>(null);
+    const [importError, setImportError] = useState<string | null>(null);
 
     useEffect(() => {
         let ignore = false;
@@ -33,6 +38,22 @@ export function SourcesList({ projectId }: { projectId: string }) {
             ignore = true;
         };
     }, [projectId]);
+
+    const handleImportRoot = async (rootId: string) => {
+        setImportError(null);
+        setImportMessage(null);
+        setImportingRootId(rootId);
+        try {
+            const result = await importLocalKnowledgeRoot({ projectId, rootId });
+            setImportMessage(`Imported ${result.docCount} documents from ${rootId}.`);
+            const refreshed = await listDataSources(projectId);
+            setSources(refreshed);
+        } catch (error) {
+            setImportError(error instanceof Error ? error.message : 'Import failed');
+        } finally {
+            setImportingRootId(null);
+        }
+    };
 
     return (
         <Panel
@@ -60,6 +81,52 @@ export function SourcesList({ projectId }: { projectId: string }) {
         >
             <div className="h-full overflow-auto px-4 py-4">
                 <div className="max-w-[1024px] mx-auto">
+                    <div className="mb-6">
+                        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        Local knowledge roots
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        Import local sources as text data sources for RAG.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {LOCAL_KNOWLEDGE_ROOTS.map((root) => (
+                                    <div key={root.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            {root.name}
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            {root.path}
+                                        </div>
+                                        <div className="mt-3">
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={!!importingRootId}
+                                                onClick={() => handleImportRoot(root.id)}
+                                            >
+                                                {importingRootId === root.id ? 'Importing...' : 'Import'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {importMessage && (
+                                <div className="mt-3 text-xs text-green-600 dark:text-green-400">
+                                    {importMessage}
+                                </div>
+                            )}
+                            {importError && (
+                                <div className="mt-3 text-xs text-red-600 dark:text-red-400">
+                                    {importError}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                     {loading && (
                         <div className="flex items-center gap-2">
                             <Spinner size="sm" />

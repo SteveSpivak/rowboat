@@ -23,6 +23,7 @@ import { useCopilot } from "../copilot/use-copilot";
 import { BillingUpgradeModal } from "@/components/common/billing-upgrade-modal";
 import { ModelsResponse } from "@/app/lib/types/billing_types";
 import { SectionCard } from "@/components/common/section-card";
+import { LOCAL_CONNECTORS, fetchLocalConnectorModels, joinConnectorModel, splitConnectorModel } from "@/app/lib/local-connectors";
 
 // Common section header styles
 const sectionHeaderStyles = "block text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400";
@@ -79,6 +80,11 @@ export function AgentConfig({
     const [showSavedBanner, setShowSavedBanner] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
     const nameInputRef = useRef<HTMLInputElement>(null);
+    const [connectorModels, setConnectorModels] = useState<Array<{ id: string; connector: string; model: string; label: string }>>([]);
+    const [connectorLoading, setConnectorLoading] = useState(false);
+    const [connectorError, setConnectorError] = useState<string | null>(null);
+    const [selectedConnector, setSelectedConnector] = useState(() => splitConnectorModel(agent.model).connector);
+    const [selectedModel, setSelectedModel] = useState(() => splitConnectorModel(agent.model).model);
 
     // Check if this agent is a pipeline agent
     const isPipelineAgent = agent.type === 'pipeline';
@@ -101,6 +107,38 @@ export function AgentConfig({
     useEffect(() => {
         setLocalName(agent.name);
     }, [agent.name]);
+
+    useEffect(() => {
+        const parsed = splitConnectorModel(agent.model);
+        setSelectedConnector(parsed.connector);
+        setSelectedModel(parsed.model);
+    }, [agent.model]);
+
+    useEffect(() => {
+        if (eligibleModels !== "*") {
+            return;
+        }
+        let isActive = true;
+        setConnectorLoading(true);
+        setConnectorError(null);
+        fetchLocalConnectorModels()
+            .then((models) => {
+                if (!isActive) return;
+                setConnectorModels(models);
+            })
+            .catch((error) => {
+                if (!isActive) return;
+                setConnectorError(error instanceof Error ? error.message : 'Failed to load connector models');
+            })
+            .finally(() => {
+                if (!isActive) return;
+                setConnectorLoading(false);
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [eligibleModels]);
 
     // Focus name input when entering edit mode
     useEffect(() => {
@@ -492,18 +530,82 @@ export function AgentConfig({
                                         <label className="text-sm font-semibold text-gray-600 dark:text-gray-300 md:w-32 mb-1 md:mb-0 md:pr-4">Model</label>
                                         <div className="flex-1">
                                             {/* Model select/input logic unchanged */}
-                                            {eligibleModels === "*" && <InputField
-                                                type="text"
-                                                value={agent.model}
-                                                onChange={(value: string) => {
-                                                    handleUpdate({
-                                                        ...agent,
-                                                        model: value as z.infer<typeof WorkflowAgent>["model"]
-                                                    });
-                                                    showSavedMessage();
-                                                }}
-                                                className="w-full max-w-64"
-                                            />}
+                                            {eligibleModels === "*" && (
+                                                <div className="flex flex-col gap-3 max-w-64">
+                                                    <Select
+                                                        variant="bordered"
+                                                        placeholder="Select connector"
+                                                        selectedKeys={[selectedConnector]}
+                                                        onSelectionChange={(keys) => {
+                                                            const key = keys.currentKey as string;
+                                                            if (!key) return;
+                                                            const connector = key as typeof selectedConnector;
+                                                            setSelectedConnector(connector);
+                                                            const options = connectorModels.filter((item) => item.connector === connector);
+                                                            const nextModel = options[0]?.model || selectedModel || 'gpt-5.4';
+                                                            setSelectedModel(nextModel);
+                                                            handleUpdate({
+                                                                ...agent,
+                                                                model: joinConnectorModel(connector, nextModel) as z.infer<typeof WorkflowAgent>["model"],
+                                                            });
+                                                            showSavedMessage();
+                                                        }}
+                                                    >
+                                                        {LOCAL_CONNECTORS.map((connector) => (
+                                                            <SelectItem key={connector.key}>
+                                                                {connector.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </Select>
+                                                    {connectorLoading ? (
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                            Loading connector models...
+                                                        </div>
+                                                    ) : connectorError ? (
+                                                        <div className="text-xs text-red-500">
+                                                            {connectorError}
+                                                        </div>
+                                                    ) : (
+                                                        <Select
+                                                            variant="bordered"
+                                                            placeholder="Select model"
+                                                            selectedKeys={[selectedModel]}
+                                                            onSelectionChange={(keys) => {
+                                                                const key = keys.currentKey as string;
+                                                                if (!key) return;
+                                                                setSelectedModel(key);
+                                                                handleUpdate({
+                                                                    ...agent,
+                                                                    model: joinConnectorModel(selectedConnector, key) as z.infer<typeof WorkflowAgent>["model"],
+                                                                });
+                                                                showSavedMessage();
+                                                            }}
+                                                        >
+                                                            {connectorModels
+                                                                .filter((item) => item.connector === selectedConnector)
+                                                                .map((item) => (
+                                                                    <SelectItem key={item.model}>
+                                                                        {item.model}
+                                                                    </SelectItem>
+                                                                ))}
+                                                        </Select>
+                                                    )}
+                                                    <InputField
+                                                        type="text"
+                                                        value={selectedModel}
+                                                        onChange={(value: string) => {
+                                                            setSelectedModel(value);
+                                                            handleUpdate({
+                                                                ...agent,
+                                                                model: joinConnectorModel(selectedConnector, value) as z.infer<typeof WorkflowAgent>["model"]
+                                                            });
+                                                            showSavedMessage();
+                                                        }}
+                                                        className="w-full"
+                                                        placeholder="Custom model name"
+                                                    />
+                                                </div>
+                                            )}
                                             {eligibleModels !== "*" && <Select
                                                 variant="bordered"
                                                 placeholder="Select model"

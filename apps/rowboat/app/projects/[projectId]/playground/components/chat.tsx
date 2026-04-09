@@ -12,6 +12,7 @@ import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import { FeedbackModal } from "./feedback-modal";
 import { FIX_WORKFLOW_PROMPT, FIX_WORKFLOW_PROMPT_WITH_FEEDBACK, EXPLAIN_WORKFLOW_PROMPT_ASSISTANT, EXPLAIN_WORKFLOW_PROMPT_TOOL, EXPLAIN_WORKFLOW_PROMPT_TRANSITION } from "../copilot-prompts";
 import { TurnEvent } from "@/src/entities/models/turn";
+import { storageSetItem } from "@/app/lib/browser-storage";
 
 export function Chat({
     projectId,
@@ -116,7 +117,7 @@ export function Chat({
             setTimeout(() => setShowSuccessMessage(false), 3000);
         } else {
             // Fallback for standalone playground
-            localStorage.setItem(`project_prompt_${projectId}`, prompt);
+            storageSetItem(`project_prompt_${projectId}`, prompt);
             alert('Fix request submitted! Redirecting to workflow editor...');
             window.location.href = `/projects/${projectId}/workflow`;
         }
@@ -137,7 +138,7 @@ export function Chat({
             setShowExplainSuccess(true);
             setTimeout(() => setShowExplainSuccess(false), 3000);
         } else {
-            localStorage.setItem(`project_prompt_${projectId}`, prompt);
+            storageSetItem(`project_prompt_${projectId}`, prompt);
             alert('Explain request submitted! Redirecting to workflow editor...');
             window.location.href = `/projects/${projectId}/workflow`;
         }

@@ -83,6 +83,7 @@ export function BuildAssistantSection() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const currentProjects = projects.slice(startIndex, endIndex);
+    const featuredProjects = projects.slice(0, 5);
 
     // Extract unique tools from template - using same approach as ToolkitCard
     const getUniqueTools = (template: any) => {
@@ -290,6 +291,13 @@ export function BuildAssistantSection() {
         ensureTemplatesLoaded('prebuilt', 12);
     }, [ensureTemplatesLoaded]);
 
+    useEffect(() => {
+        const view = searchParams.get('view');
+        if (view === 'new' || view === 'existing') {
+            setSelectedTab(view);
+        }
+    }, [searchParams]);
+
     // Handle URL parameters for auto-creation and direct redirect to build view
     useEffect(() => {
         const urlPrompt = searchParams.get('prompt');
@@ -439,6 +447,73 @@ export function BuildAssistantSection() {
                         <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-gray-100 mb-6 leading-tight">
                             Build <span className="bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">Rowboats</span> that Work for You
                         </h1>
+                    </div>
+
+                    {/* Assistants Overview */}
+                    <div id="assistants" className="max-w-5xl mx-auto mb-12">
+                        <div className="flex items-center justify-between px-6">
+                            <div>
+                                <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Your assistants</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Jump back into existing assistants or create a new one.</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setSelectedTab('existing')}
+                                >
+                                    View all
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={() => setSelectedTab('new')}
+                                >
+                                    New assistant
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="mt-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
+                            {projectsLoading ? (
+                                <div className="flex items-center justify-center h-full text-sm text-gray-500 dark:text-gray-400">
+                                    Loading assistants...
+                                </div>
+                            ) : featuredProjects.length === 0 ? (
+                                <div className="flex items-center justify-center h-full text-sm text-gray-500 dark:text-gray-400">
+                                    No assistants yet. Start with a new one below.
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {featuredProjects.map((project) => (
+                                        <Link
+                                            key={project.id}
+                                            href={`/projects/${project.id}/workflow`}
+                                            className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all group hover:shadow-sm"
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-2 h-2 rounded-full bg-green-500 opacity-75 flex-shrink-0"></div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                                                            {project.name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            Created {new Date(project.createdAt).toLocaleDateString()}
+                                                            {project.lastUpdatedAt && `• Last updated ${new Date(project.lastUpdatedAt).toLocaleDateString()}`}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex-shrink-0 ml-4">
+                                                <div className="text-xs text-gray-400 dark:text-gray-500">
+                                                    →
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Tabs Section */}
@@ -612,6 +687,55 @@ export function BuildAssistantSection() {
                                     </div>
                                 </Tab>
                             </Tabs>
+                        </div>
+                    </div>
+
+                    <div id="knowledge" className="max-w-5xl mx-auto mt-16">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+                            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Local knowledge sources</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Attach your local knowledge roots to an assistant by importing them as project data sources.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-700 dark:text-gray-300">
+                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">NewVault</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">/Users/steve.spivak/NewVault</div>
+                                </div>
+                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">agent-workspace</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">/Users/steve.spivak/agent-workspace</div>
+                                </div>
+                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">dev</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">/Users/steve.spivak/dev</div>
+                                </div>
+                            </div>
+                            <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                                Open an assistant and visit Sources to import one of these roots.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="connectors" className="max-w-5xl mx-auto mt-10">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+                            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Connectors and skills</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Models run locally through CLI connectors. Tools are configured per assistant.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
+                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">CLI connectors</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Codex CLI, Gemini CLI, Claude CLI, Ollama (local)
+                                    </div>
+                                </div>
+                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">Skills</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Skills live in your local brain and can be referenced in instructions.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

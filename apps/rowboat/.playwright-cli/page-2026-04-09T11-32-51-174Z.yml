@@ -1,0 +1,56 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e5]:
+      - generic [ref=e6]:
+        - link "Rowboat" [ref=e8] [cursor=pointer]:
+          - /url: /projects
+          - img "Rowboat" [ref=e9]
+        - navigation [ref=e10]
+      - generic [ref=e11]:
+        - button [ref=e13]:
+          - img [ref=e14]
+        - button [ref=e17]:
+          - img [ref=e18]
+    - main [ref=e21]:
+      - generic [ref=e24]:
+        - heading "Build Rowboats that Work for You" [level=1] [ref=e26]
+        - generic [ref=e28]:
+          - tablist [ref=e30]:
+            - tab "New Assistant" [selected] [ref=e31] [cursor=pointer]:
+              - generic [ref=e33]: New Assistant
+            - tab "My Assistants" [ref=e34] [cursor=pointer]:
+              - generic [ref=e35]: My Assistants
+          - tabpanel "New Assistant" [ref=e36]:
+            - generic [ref=e37]:
+              - generic [ref=e38]:
+                - img "Rowboat Mascot" [ref=e40]
+                - generic [ref=e42]:
+                  - heading "Hey! What agents can I build for you?" [level=2] [ref=e43]
+                  - generic [ref=e45]:
+                    - 'textbox "Example: Build me an assistant to manage my email and calendar..." [active] [ref=e47]'
+                    - generic [ref=e48]:
+                      - button "Add" [ref=e49]:
+                        - img [ref=e50]
+                      - button "Send" [disabled] [ref=e51]:
+                        - img [ref=e52]
+              - generic [ref=e56]:
+                - button "📝 Blog assistant" [ref=e57]:
+                  - generic [ref=e58]: 📝
+                  - text: Blog assistant
+                - button "📅 Meeting prep workflow" [ref=e59]:
+                  - generic [ref=e60]: 📅
+                  - text: Meeting prep workflow
+                - button "✅ Scheduling assistant" [ref=e61]:
+                  - generic [ref=e62]: ✅
+                  - text: Scheduling assistant
+                - button "🔍 Reddit & HN assistant" [ref=e63]:
+                  - generic [ref=e64]: 🔍
+                  - text: Reddit & HN assistant
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - heading "Templates" [level=2] [ref=e68]
+            - paragraph [ref=e69]: Discover and use pre-built and community templates.
+          - paragraph [ref=e73]: Loading templates...
+  - alert [ref=e74]
+  - button "Open Next.js Dev Tools" [ref=e80] [cursor=pointer]:
+    - img [ref=e81]

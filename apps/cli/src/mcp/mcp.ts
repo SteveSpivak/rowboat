@@ -1,4 +1,3 @@
-import container from "../di/container.js";
 import { Client } from "@modelcontextprotocol/sdk/client";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -24,6 +23,7 @@ async function getClient(serverName: string): Promise<Client> {
     if (clients[serverName] && clients[serverName].state === "connected") {
         return clients[serverName].client!;
     }
+    const { default: container } = await import("../di/container.js");
     const repo = container.resolve<IMcpConfigRepo>('mcpConfigRepo');
     const { mcpServers } = await repo.getConfig();
     const config = mcpServers[serverName];
@@ -86,6 +86,7 @@ export async function cleanup() {
 }
 
 export async function listServers(): Promise<z.infer<typeof McpServerList>> {
+    const { default: container } = await import("../di/container.js");
     const repo = container.resolve<IMcpConfigRepo>('mcpConfigRepo');
     const { mcpServers } = await repo.getConfig();
     const result: z.infer<typeof McpServerList> = {

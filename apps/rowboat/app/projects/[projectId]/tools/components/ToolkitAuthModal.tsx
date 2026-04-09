@@ -37,6 +37,24 @@ export function ToolkitAuthModal({
   const [selectedAuthScheme, setSelectedAuthScheme] = useState<z.infer<typeof ZAuthScheme> | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
 
+  const syncUntilSettled = useCallback(async (connectedAccountId: string) => {
+    const maxAttempts = 5;
+    let lastAccount = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const account = await syncConnectedAccount(projectId, toolkitSlug, connectedAccountId);
+      lastAccount = account;
+
+      if (account.status === 'ACTIVE' || account.status === 'FAILED') {
+        return account;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    }
+
+    return lastAccount;
+  }, [projectId, toolkitSlug]);
+
   // Fetch toolkit details when modal opens
   useEffect(() => {
     if (isOpen && toolkitSlug) {
@@ -74,17 +92,25 @@ export function ToolkitAuthModal({
 
   const handleOAuthCompletion = useCallback(async (connectedAccountId: string) => {
     try {
-      // Sync the connected account to get the latest status
-      await syncConnectedAccount(projectId, toolkitSlug, connectedAccountId);
-      
-      // Call completion callback
-      onComplete();
-      onClose();
+      const account = await syncUntilSettled(connectedAccountId);
+
+      if (account?.status === 'ACTIVE') {
+        onComplete();
+        onClose();
+        return;
+      }
+
+      if (account?.status === 'FAILED') {
+        setError('Authentication completed, but Twitter failed to activate. Please retry the connection.');
+        return;
+      }
+
+      setError('Authentication completed, but Twitter is still finishing setup. Wait a few seconds and try again.');
     } catch (error) {
       console.error('Error syncing connected account after OAuth:', error);
       setError('Authentication completed but failed to sync status. Please refresh and try again.');
     }
-  }, [projectId, toolkitSlug, onComplete, onClose]);
+  }, [onComplete, onClose, syncUntilSettled]);
 
   const handleComposioOAuth2 = useCallback(async () => {
     setError(null);
@@ -269,9 +295,7 @@ export function ToolkitAuthModal({
         }
       } else {
         // No redirect needed, just sync and complete
-        await syncConnectedAccount(projectId, toolkitSlug, response.id);
-        onComplete();
-        onClose();
+        await handleOAuthCompletion(response.id);
       }
     } catch (err: any) {
       console.error('Custom auth failed:', err);
@@ -280,7 +304,7 @@ export function ToolkitAuthModal({
     } finally {
       setProcessing(false);
     }
-  }, [selectedAuthScheme, toolkit, projectId, formData, handleOAuthCompletion, onComplete, onClose, toolkitSlug]);
+  }, [selectedAuthScheme, toolkit, projectId, formData, handleOAuthCompletion, toolkitSlug]);
 
   const handleBackToOptions = useCallback(() => {
     setShowForm(false);

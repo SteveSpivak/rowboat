@@ -40,6 +40,7 @@ import { Button as CustomButton } from "@/components/ui/button";
 
 import { InputField } from "@/app/lib/components/input-field";
 import { getDefaultTools } from "@/app/lib/default_tools";
+import { storageGetItem, storageRemoveItem, storageSetItem } from "@/app/lib/browser-storage";
 import { VoiceSection } from "../config/components/voice";
 import { TopBar } from "./components/TopBar";
 
@@ -1032,11 +1033,11 @@ export function WorkflowEditor({
         const fromUrl = new URLSearchParams(window.location.search).get('view');
         const valid: ViewMode[] = ["two_agents_chat", "two_agents_skipper", "two_chat_skipper", "three_all"];
         if (fromUrl && (valid as string[]).includes(fromUrl)) {
-            localStorage.setItem('workflow_view_mode', fromUrl);
+            storageSetItem('workflow_view_mode', fromUrl);
             return fromUrl as ViewMode;
         }
         
-        const storedViewMode = localStorage.getItem('workflow_view_mode') as ViewMode;
+        const storedViewMode = storageGetItem('workflow_view_mode') as ViewMode;
         const hasAgents = workflow.agents.length > 0;
         
         // If workflow has agents and stored view mode is "Hide chat" (two_agents_skipper), 
@@ -1059,7 +1060,7 @@ export function WorkflowEditor({
         }
         
         if (typeof window !== 'undefined') {
-            localStorage.setItem('workflow_view_mode', mode);
+            storageSetItem('workflow_view_mode', mode);
             const url = new URL(window.location.href);
             url.searchParams.set('view', mode);
             window.history.replaceState({}, '', url.toString());
@@ -1157,33 +1158,29 @@ export function WorkflowEditor({
     
     // Build progress tracking - persists once set to true (guard SSR)
     const [hasAgentInstructionChanges, setHasAgentInstructionChanges] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return localStorage.getItem(`agent_instructions_changed_${projectId}`) === 'true';
+        return storageGetItem(`agent_instructions_changed_${projectId}`) === 'true';
     });
 
     // Test progress tracking - persists once set to true (guard SSR)
     const [hasPlaygroundTested, setHasPlaygroundTested] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return localStorage.getItem(`playground_tested_${projectId}`) === 'true';
+        return storageGetItem(`playground_tested_${projectId}`) === 'true';
     });
 
     // Publish progress tracking - persists once set to true (guard SSR)
     const [hasPublished, setHasPublished] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return localStorage.getItem(`has_published_${projectId}`) === 'true';
+        return storageGetItem(`has_published_${projectId}`) === 'true';
     });
 
     // Use progress tracking - persists once set to true (guard SSR)
     const [hasClickedUse, setHasClickedUse] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return localStorage.getItem(`has_clicked_use_${projectId}`) === 'true';
+        return storageGetItem(`has_clicked_use_${projectId}`) === 'true';
     });
 
     // Function to mark agent instructions as changed (persists in localStorage)
     const markAgentInstructionsChanged = useCallback(() => {
         if (!hasAgentInstructionChanges) {
             setHasAgentInstructionChanges(true);
-            localStorage.setItem(`agent_instructions_changed_${projectId}`, 'true');
+            storageSetItem(`agent_instructions_changed_${projectId}`, 'true');
         }
     }, [hasAgentInstructionChanges, projectId]);
 
@@ -1191,7 +1188,7 @@ export function WorkflowEditor({
     const markPlaygroundTested = useCallback(() => {
         if (!hasPlaygroundTested && hasAgentInstructionChanges) { // Only mark if step 1 is complete
             setHasPlaygroundTested(true);
-            localStorage.setItem(`playground_tested_${projectId}`, 'true');
+            storageSetItem(`playground_tested_${projectId}`, 'true');
         }
     }, [hasPlaygroundTested, hasAgentInstructionChanges, projectId]);
 
@@ -1199,7 +1196,7 @@ export function WorkflowEditor({
     const markAsPublished = useCallback(() => {
         if (!hasPublished) {
             setHasPublished(true);
-            localStorage.setItem(`has_published_${projectId}`, 'true');
+            storageSetItem(`has_published_${projectId}`, 'true');
         }
     }, [hasPublished, projectId]);
 
@@ -1207,7 +1204,7 @@ export function WorkflowEditor({
     const markUseAssistantClicked = useCallback(() => {
         if (!hasClickedUse) {
             setHasClickedUse(true);
-            localStorage.setItem(`has_clicked_use_${projectId}`, 'true');
+            storageSetItem(`has_clicked_use_${projectId}`, 'true');
         }
     }, [hasClickedUse, projectId]);
 
@@ -1270,13 +1267,13 @@ export function WorkflowEditor({
     const hasSentInitPromptRef = useRef<boolean>(false);
     useEffect(() => {
         if (hasSentInitPromptRef.current) return;
-        const prompt = localStorage.getItem(`project_prompt_${projectId}`);
+        const prompt = storageGetItem(`project_prompt_${projectId}`);
         console.log('init project prompt', prompt);
         if (!prompt) return;
 
         // Mark as handled and remove immediately to avoid any other readers
         hasSentInitPromptRef.current = true;
-        localStorage.removeItem(`project_prompt_${projectId}`);
+        storageRemoveItem(`project_prompt_${projectId}`);
 
         // Switch UI to show Copilot
         setActivePanel('copilot');
@@ -1538,7 +1535,7 @@ export function WorkflowEditor({
             return acc;
         }, {} as Record<string, number>);
         const mode = isLive ? 'live' : 'draft';
-        localStorage.setItem(`${mode}_workflow_${projectId}_agent_order`, JSON.stringify(orderMap));
+        storageSetItem(`${mode}_workflow_${projectId}_agent_order`, JSON.stringify(orderMap));
         
         dispatch({ type: "reorder_agents", agents });
     }
@@ -1550,7 +1547,7 @@ export function WorkflowEditor({
             return acc;
         }, {} as Record<string, number>);
         const mode = isLive ? 'live' : 'draft';
-        localStorage.setItem(`${mode}_workflow_${projectId}_pipeline_order`, JSON.stringify(orderMap));
+        storageSetItem(`${mode}_workflow_${projectId}_pipeline_order`, JSON.stringify(orderMap));
         
         dispatch({ type: "reorder_pipelines", pipelines });
     }

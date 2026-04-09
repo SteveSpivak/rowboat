@@ -5,7 +5,6 @@ import { WorkDir as BASE_DIR } from "../../config/config.js";
 import { executeCommand } from "./command-executor.js";
 import { resolveSkill, availableSkills } from "../assistant/skills/index.js";
 import { executeTool, listServers, listTools } from "../../mcp/mcp.js";
-import container from "../../di/container.js";
 import { IMcpConfigRepo } from "../..//mcp/repo.js";
 import { McpServerDefinition } from "../../mcp/schema.js";
 
@@ -326,6 +325,7 @@ export const BuiltinTools: z.infer<typeof BuiltinToolsSchema> = {
                     };
                 }
 
+                const { default: container } = await import("../../di/container.js");
                 const repo = container.resolve<IMcpConfigRepo>('mcpConfigRepo');
                 await repo.upsert(serverName, config);
                 

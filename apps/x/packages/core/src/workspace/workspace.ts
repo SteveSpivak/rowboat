@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import type { Stats } from 'node:fs';
+import type { Dirent, Stats } from 'node:fs';
 import path from 'node:path';
 import { workspace } from '@x/shared';
 import { z } from 'zod';
@@ -7,6 +7,14 @@ import { RemoveOptions, WriteFileOptions, WriteFileResult } from 'packages/share
 import { WorkDir } from '../config/config.js';
 import { rewriteWikiLinksForRenamedKnowledgeFile } from './wiki-link-rewrite.js';
 import { commitAll } from '../knowledge/version_history.js';
+import {
+  absExternalToRelPosix,
+  getExternalVirtualEntries,
+  isExternalVirtualDirectory,
+  isReadOnlyExternalPath,
+  matchExternalMount,
+  resolveExternalSourcePath,
+} from './external_sources.js';
 
 // ============================================================================
 // Path Utilities
@@ -34,7 +42,7 @@ export function assertSafeRelPath(relPath: string): void {
  * Ensures the resolved path stays within the workspace boundary
  * Empty string represents the root directory
  */
-export function resolveWorkspacePath(relPath: string): string {
+function resolveInternalWorkspacePath(relPath: string): string {
   // Empty string means root directory
   if (relPath === '') {
     return WorkDir;
@@ -47,11 +55,26 @@ export function resolveWorkspacePath(relPath: string): string {
   return resolved;
 }
 
+export function resolveWorkspacePath(relPath: string): string {
+  if (relPath !== '') {
+    assertSafeRelPath(relPath);
+    const externalResolved = resolveExternalSourcePath(relPath);
+    if (externalResolved) {
+      return externalResolved;
+    }
+  }
+  return resolveInternalWorkspacePath(relPath);
+}
+
 /**
  * Convert absolute path to workspace-relative POSIX path
  * Returns null if path is outside workspace boundary
  */
 export function absToRelPosix(absPath: string): string | null {
+  const externalRelPath = absExternalToRelPosix(absPath);
+  if (externalRelPath) {
+    return externalRelPath;
+  }
   const normalized = path.normalize(absPath);
   if (!normalized.startsWith(WorkDir + path.sep) && normalized !== WorkDir) {
     return null;
@@ -63,6 +86,12 @@ export function absToRelPosix(absPath: string): string | null {
 function isKnowledgeMarkdownRelPath(relPath: string): boolean {
   const normalized = relPath.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
   return normalized.startsWith('knowledge/') && normalized.endsWith('.md');
+}
+
+function assertWritablePath(relPath: string): void {
+  if (isReadOnlyExternalPath(relPath)) {
+    throw new Error('External knowledge sources are read-only');
+  }
 }
 
 // ============================================================================
@@ -106,6 +135,9 @@ export async function getRoot(): Promise<{ root: string }> {
 }
 
 export async function exists(relPath: string): Promise<{ exists: boolean }> {
+  if (isExternalVirtualDirectory(relPath)) {
+    return { exists: true };
+  }
   const filePath = resolveWorkspacePath(relPath);
   try {
     await fs.access(filePath);
@@ -116,6 +148,14 @@ export async function exists(relPath: string): Promise<{ exists: boolean }> {
 }
 
 export async function stat(relPath: string): Promise<z.infer<typeof workspace.Stat>> {
+  if (isExternalVirtualDirectory(relPath)) {
+    return {
+      kind: 'dir',
+      size: 0,
+      mtimeMs: 0,
+      ctimeMs: 0,
+    };
+  }
   const filePath = resolveWorkspacePath(relPath);
   const stats = await fs.lstat(filePath);
   const kind = stats.isDirectory() ? 'dir' : 'file';
@@ -126,56 +166,121 @@ export async function readdir(
   relPath: string,
   opts?: z.infer<typeof workspace.ReaddirOptions>,
 ): Promise<Array<z.infer<typeof workspace.DirEntry>>> {
-  const dirPath = resolveWorkspacePath(relPath);
   const entries: Array<z.infer<typeof workspace.DirEntry>> = [];
+  const seenPaths = new Set<string>();
 
-  async function readDir(currentPath: string, currentRelPath: string): Promise<void> {
-    const items = await fs.readdir(currentPath, { withFileTypes: true });
+  function shouldIncludeName(name: string): boolean {
+    if (!opts?.includeHidden && name.startsWith('.')) {
+      return false;
+    }
+    if (opts?.allowedExtensions && opts.allowedExtensions.length > 0) {
+      const ext = path.extname(name);
+      if (!opts.allowedExtensions.includes(ext)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function pushEntry(name: string, entryPath: string, kind: z.infer<typeof workspace.NodeKind>, absPath?: string): Promise<void> {
+    if (seenPaths.has(entryPath)) {
+      return;
+    }
+    seenPaths.add(entryPath);
+
+    let itemStat: { size: number; mtimeMs: number } | undefined;
+    if (opts?.includeStats && absPath) {
+      const stats = await fs.lstat(absPath);
+      itemStat = { size: stats.size, mtimeMs: stats.mtimeMs };
+    }
+
+    entries.push({ name, path: entryPath, kind, stat: itemStat });
+  }
+
+  async function readDir(currentRelPath: string): Promise<void> {
+    for (const virtualEntry of getExternalVirtualEntries(currentRelPath)) {
+      await pushEntry(virtualEntry.name, virtualEntry.path, 'dir');
+      if (opts?.recursive) {
+        await readDir(virtualEntry.path);
+      }
+    }
+
+    const externalMatch = matchExternalMount(currentRelPath);
+    if (externalMatch?.mount.type === 'selected-files' && externalMatch.remainder === '') {
+      for (const fileName of externalMatch.mount.allowedFiles ?? []) {
+        if (!shouldIncludeName(fileName)) {
+          continue;
+        }
+        const absPath = path.join(externalMatch.mount.sourcePath, fileName);
+        try {
+          const stats = await fs.lstat(absPath);
+          if (!stats.isFile()) {
+            continue;
+          }
+        } catch {
+          continue;
+        }
+        await pushEntry(fileName, path.posix.join(currentRelPath, fileName), 'file', absPath);
+      }
+      return;
+    }
+
+    let currentPath: string;
+    try {
+      currentPath = externalMatch ? resolveWorkspacePath(currentRelPath) : resolveInternalWorkspacePath(currentRelPath);
+    } catch (error) {
+      if (seenPaths.size > 0 || getExternalVirtualEntries(currentRelPath).length > 0) {
+        return;
+      }
+      throw error;
+    }
+
+    let items: Dirent[];
+    try {
+      items = await fs.readdir(currentPath, { withFileTypes: true });
+    } catch (error) {
+      if (getExternalVirtualEntries(currentRelPath).length > 0) {
+        return;
+      }
+      throw error;
+    }
 
     for (const item of items) {
-      // Skip hidden files unless includeHidden is true
-      if (!opts?.includeHidden && item.name.startsWith('.')) {
+      if (
+        externalMatch?.mount.type === 'directory'
+        && externalMatch.remainder === ''
+        && externalMatch.mount.excludeTopLevel?.includes(item.name)
+      ) {
         continue;
       }
 
       const itemPath = path.join(currentPath, item.name);
       const itemRelPath = path.posix.join(currentRelPath, item.name);
 
-      // Filter by extension if specified
-      if (opts?.allowedExtensions && opts.allowedExtensions.length > 0) {
-        const ext = path.extname(item.name);
-        if (!opts.allowedExtensions.includes(ext)) {
-          continue;
-        }
-      }
-
       let itemKind: z.infer<typeof workspace.NodeKind>;
-      let itemStat: { size: number; mtimeMs: number } | undefined;
 
       if (item.isDirectory()) {
-        itemKind = 'dir';
-        if (opts?.includeStats) {
-          const stats = await fs.lstat(itemPath);
-          itemStat = { size: stats.size, mtimeMs: stats.mtimeMs };
+        if (!opts?.includeHidden && item.name.startsWith('.')) {
+          continue;
         }
-        entries.push({ name: item.name, path: itemRelPath, kind: itemKind, stat: itemStat });
+        itemKind = 'dir';
+        await pushEntry(item.name, itemRelPath, itemKind, itemPath);
 
         // Recurse if recursive is true
         if (opts?.recursive) {
-          await readDir(itemPath, itemRelPath);
+          await readDir(itemRelPath);
         }
       } else if (item.isFile()) {
-        itemKind = 'file';
-        if (opts?.includeStats) {
-          const stats = await fs.lstat(itemPath);
-          itemStat = { size: stats.size, mtimeMs: stats.mtimeMs };
+        if (!shouldIncludeName(item.name)) {
+          continue;
         }
-        entries.push({ name: item.name, path: itemRelPath, kind: itemKind, stat: itemStat });
+        itemKind = 'file';
+        await pushEntry(item.name, itemRelPath, itemKind, itemPath);
       }
     }
   }
 
-  await readDir(dirPath, relPath);
+  await readDir(relPath);
 
   // Sort: directories first, then by name (localeCompare)
   entries.sort((a, b) => {
@@ -239,6 +344,7 @@ export async function writeFile(
   data: string,
   opts?: z.infer<typeof WriteFileOptions>
 ): Promise<z.infer<typeof WriteFileResult>> {
+  assertWritablePath(relPath);
   const filePath = resolveWorkspacePath(relPath);
   const encoding = opts?.encoding || 'utf8';
   const atomic = opts?.atomic !== false; // default true
@@ -298,6 +404,7 @@ export async function mkdir(
   relPath: string,
   recursive: boolean = true
 ): Promise<{ ok: true }> {
+  assertWritablePath(relPath);
   const dirPath = resolveWorkspacePath(relPath);
   await fs.mkdir(dirPath, { recursive });
   return { ok: true as const };
@@ -308,6 +415,8 @@ export async function rename(
   to: string,
   overwrite: boolean = false
 ): Promise<{ ok: true }> {
+  assertWritablePath(from);
+  assertWritablePath(to);
   const fromPath = resolveWorkspacePath(from);
   const toPath = resolveWorkspacePath(to);
 
@@ -358,6 +467,7 @@ export async function copy(
   to: string,
   overwrite: boolean = false
 ): Promise<{ ok: true }> {
+  assertWritablePath(to);
   const fromPath = resolveWorkspacePath(from);
   const toPath = resolveWorkspacePath(to);
 
@@ -383,6 +493,7 @@ export async function remove(
   relPath: string,
   opts?: z.infer<typeof RemoveOptions>
 ): Promise<{ ok: true }> {
+  assertWritablePath(relPath);
   const filePath = resolveWorkspacePath(relPath);
   const trash = opts?.trash !== false; // default true
 

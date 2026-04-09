@@ -141,6 +141,10 @@ type ServiceEventType = z.infer<typeof ServiceEvent>
 
 const MAX_SYNC_EVENTS = 1000
 const RUN_STALE_MS = 2 * 60 * 60 * 1000
+const EXTERNAL_SOURCES_PREFIX = 'knowledge/Sources'
+
+const isExternalKnowledgeSourcePath = (value: string) =>
+  value === EXTERNAL_SOURCES_PREFIX || value.startsWith(`${EXTERNAL_SOURCES_PREFIX}/`)
 
 const SERVICE_LABELS: Record<string, string> = {
   gmail: "Syncing Gmail",
@@ -1029,6 +1033,7 @@ function Tree({
   const isDir = item.kind === 'dir'
   const isExpanded = expandedPaths.has(item.path)
   const isSelected = selectedPath === item.path
+  const isReadOnlySource = isExternalKnowledgeSourcePath(item.path)
   const [isRenaming, setIsRenaming] = useState(false)
   const isSubmittingRef = React.useRef(false)
   const displayName = (isDir && FOLDER_DISPLAY_NAMES[item.name]) || item.name
@@ -1090,7 +1095,7 @@ function Tree({
 
   const contextMenuContent = (
     <ContextMenuContent className="w-48">
-      {isDir && (
+      {isDir && !isReadOnlySource && (
         <>
           <ContextMenuItem onClick={() => actions.createNote(item.path)}>
             <FilePlus className="mr-2 size-4" />
@@ -1116,15 +1121,19 @@ function Tree({
         <Copy className="mr-2 size-4" />
         Copy Path
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => { setNewName(baseName); isSubmittingRef.current = false; setIsRenaming(true) }}>
-        <Pencil className="mr-2 size-4" />
-        Rename
-      </ContextMenuItem>
-      <ContextMenuItem variant="destructive" onClick={handleDelete}>
-        <Trash2 className="mr-2 size-4" />
-        Delete
-      </ContextMenuItem>
+      {!isReadOnlySource && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => { setNewName(baseName); isSubmittingRef.current = false; setIsRenaming(true) }}>
+            <Pencil className="mr-2 size-4" />
+            Rename
+          </ContextMenuItem>
+          <ContextMenuItem variant="destructive" onClick={handleDelete}>
+            <Trash2 className="mr-2 size-4" />
+            Delete
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   )
 
@@ -1162,7 +1171,7 @@ function Tree({
 
   // Top-level knowledge folders (except Notes) open bases view — render as flat items
   const parts = item.path.split('/')
-  const isBasesFolder = isDir && parts.length === 2 && parts[0] === 'knowledge' && parts[1] !== 'Notes'
+  const isBasesFolder = isDir && parts.length === 2 && parts[0] === 'knowledge' && parts[1] !== 'Notes' && parts[1] !== 'Sources'
 
   if (isBasesFolder) {
     return (

@@ -6,6 +6,7 @@ import { BadRequestError, BillingError } from "@/src/entities/errors/common";
 import { IProjectMembersRepository } from "../../repositories/project-members.repository.interface";
 import { authorize, getCustomerForUserId } from "@/app/lib/billing";
 import { USE_BILLING } from "@/app/lib/feature_flags";
+import { resolvePrebuiltTemplate } from "@/app/lib/prebuilt-cards";
 import { Project } from "@/src/entities/models/project";
 import { Workflow } from "@/app/lib/types/workflow_types";
 import { templates } from "@/app/lib/project_templates";
@@ -79,7 +80,8 @@ export class CreateProjectUseCase implements ICreateProjectUseCase {
         // generate workflow based on input
         let workflow: z.infer<typeof workflowSchema>;
         if ('template' in request.data.mode) {
-            const template = templates[request.data.mode.template] || templates.default;
+            const prebuiltTemplate = resolvePrebuiltTemplate(request.data.mode.template)?.template;
+            const template = prebuiltTemplate || templates[request.data.mode.template] || templates.default;
             workflow = {
                 agents: template.agents,
                 prompts: template.prompts,

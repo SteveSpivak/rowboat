@@ -4,15 +4,83 @@ import { Composio } from "@composio/core";
 import { ZAuthConfig, ZConnectedAccount, ZCreateAuthConfigRequest, ZCreateAuthConfigResponse, ZCreateConnectedAccountRequest, ZCreateConnectedAccountResponse, ZDeleteOperationResponse, ZErrorResponse, ZGetToolkitResponse, ZListResponse, ZTool, ZToolkit, ZTriggerType } from "./types";
 
 const BASE_URL = 'https://backend.composio.dev/api/v3';
-const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY || "test";
-export const composio = new Composio({
-    apiKey: COMPOSIO_API_KEY,
+const COMPOSIO_API_KEY = normalizeComposioApiKey(process.env.COMPOSIO_API_KEY);
+
+let composioClient: Composio | null = null;
+
+export const composio = new Proxy({} as Composio, {
+    get(_target, property) {
+        const client = getComposioClient();
+        const value = Reflect.get(client as object, property);
+        return typeof value === 'function' ? value.bind(client) : value;
+    },
 });
 
 // Warn if API key is missing, helps diagnose HTML error pages from auth proxies
-if (!process.env.COMPOSIO_API_KEY || COMPOSIO_API_KEY === 'test') {
+if (!COMPOSIO_API_KEY) {
     const warnLogger = new PrefixLogger('composioApiCall');
-    warnLogger.log('WARNING: COMPOSIO_API_KEY is not set or using default placeholder. Requests may fail with non-JSON HTML error pages.');
+    warnLogger.log('WARNING: COMPOSIO_API_KEY is not configured. Composio list endpoints will return empty results and write actions will fail fast.');
+}
+
+function normalizeComposioApiKey(rawValue: string | undefined): string {
+    const value = rawValue?.trim() || "";
+    return value && value !== "test" ? value : "";
+}
+
+export function isComposioConfigured(): boolean {
+    return Boolean(COMPOSIO_API_KEY);
+}
+
+function getComposioClient(): Composio {
+    if (!COMPOSIO_API_KEY) {
+        throw new Error('Composio is not configured for this workspace.');
+    }
+
+    composioClient ??= new Composio({
+        apiKey: COMPOSIO_API_KEY,
+    });
+
+    return composioClient;
+}
+
+function createEmptyListResponse<T>(items: T[] = []) {
+    return {
+        items,
+        next_cursor: null,
+        total_pages: 0,
+        current_page: 0,
+        total_items: items.length,
+    };
+}
+
+function isComposioUnavailableError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    return (
+        error.message.includes('401 Unauthorized') ||
+        error.message.includes('403 Forbidden') ||
+        error.message.includes('Invalid API key format') ||
+        error.message.includes('COMPOSIO_API_KEY is not configured') ||
+        error.message.includes('Composio is not configured for this workspace') ||
+        error.message.includes('No Composio API key provided') ||
+        error.message.includes('TS-SDK::NO_API_KEY')
+    );
+}
+
+function getComposioHeaders(method: string | undefined, existingHeaders: HeadersInit | undefined): HeadersInit {
+    if (!COMPOSIO_API_KEY) {
+        throw new Error('Composio is not configured for this workspace.');
+    }
+
+    return {
+        ...existingHeaders,
+        "x-api-key": COMPOSIO_API_KEY,
+        ...(method === 'POST' ? {
+            "Content-Type": "application/json",
+        } : {}),
+    };
 }
 
 export async function composioApiCall<T extends z.ZodTypeAny>(
@@ -28,13 +96,7 @@ export async function composioApiCall<T extends z.ZodTypeAny>(
     try {
         const response = await fetch(url, {
             ...options,
-            headers: {
-                ...options.headers,
-                "x-api-key": COMPOSIO_API_KEY,
-                ...(options.method === 'POST' ? {
-                    "Content-Type": "application/json",
-                } : {}),
-            },
+            headers: getComposioHeaders(options.method, options.headers),
         });
         const duration = Date.now() - then;
         logger.log(`Took: ${duration}ms`);
@@ -76,6 +138,12 @@ export async function composioApiCall<T extends z.ZodTypeAny>(
 }
 
 export async function listToolkits(cursor: string | null = null): Promise<z.infer<ReturnType<typeof ZListResponse<typeof ZToolkit>>>> {
+    const logger = new PrefixLogger('composioApiCall');
+    if (!isComposioConfigured()) {
+        logger.log('Skipping toolkit fetch because COMPOSIO_API_KEY is not configured.');
+        return ZListResponse(ZToolkit).parse(createEmptyListResponse());
+    }
+
     const url = new URL(`${BASE_URL}/toolkits`);
 
     // set params
@@ -85,7 +153,18 @@ export async function listToolkits(cursor: string | null = null): Promise<z.infe
     }
 
     // fetch
-    return composioApiCall(ZListResponse(ZToolkit), url.toString());
+    try {
+        return await composioApiCall(ZListResponse(ZToolkit), url.toString());
+    } catch (error) {
+        if (isComposioUnavailableError(error)) {
+            logger.log('Returning empty toolkit list because Composio is unavailable.', {
+                message: error instanceof Error ? error.message : String(error),
+            });
+            return ZListResponse(ZToolkit).parse(createEmptyListResponse());
+        }
+
+        throw error;
+    }
 }
 
 export async function getToolkit(toolkitSlug: string): Promise<z.infer<typeof ZGetToolkitResponse>> {
@@ -94,6 +173,12 @@ export async function getToolkit(toolkitSlug: string): Promise<z.infer<typeof ZG
 }
 
 export async function listTools(toolkitSlug: string, searchQuery: string | null = null, cursor: string | null = null): Promise<z.infer<ReturnType<typeof ZListResponse<typeof ZTool>>>> {
+    const logger = new PrefixLogger('composioApiCall');
+    if (!isComposioConfigured()) {
+        logger.log('Skipping tools fetch because COMPOSIO_API_KEY is not configured.');
+        return ZListResponse(ZTool).parse(createEmptyListResponse());
+    }
+
     const url = new URL(`${BASE_URL}/tools`);
 
     // set params
@@ -105,55 +190,62 @@ export async function listTools(toolkitSlug: string, searchQuery: string | null 
         url.searchParams.set("cursor", cursor);
     }
 
-    // First get the tools list response
-    const toolsResponse = await fetch(url.toString(), {
-        headers: {
-            "x-api-key": COMPOSIO_API_KEY,
-        },
-    });
-    
-    if (!toolsResponse.ok) {
-        throw new Error(`Failed to fetch tools list: ${toolsResponse.status} ${toolsResponse.statusText}`);
+    try {
+        // First get the tools list response
+        const toolsResponse = await fetch(url.toString(), {
+            headers: getComposioHeaders(undefined, undefined),
+        });
+
+        if (!toolsResponse.ok) {
+            throw new Error(`Failed to fetch tools list: ${toolsResponse.status} ${toolsResponse.statusText}`);
+        }
+
+        const toolsData = await toolsResponse.json();
+
+        // Check for error response
+        if ('error' in toolsData) {
+            const response = ZErrorResponse.parse(toolsData);
+            throw new Error(`(code: ${response.error.error_code}): ${response.error.message}: ${response.error.suggested_fix}: ${response.error.errors?.join(', ')}`);
+        }
+
+        // Get toolkit data to compute no_auth for all tools
+        const toolkitUrl = new URL(`${BASE_URL}/toolkits/${toolkitSlug}`);
+        const toolkitResponse = await fetch(toolkitUrl.toString(), {
+            headers: getComposioHeaders(undefined, undefined),
+        });
+
+        if (!toolkitResponse.ok) {
+            throw new Error(`Failed to fetch toolkit: ${toolkitResponse.status} ${toolkitResponse.statusText}`);
+        }
+
+        const toolkitData = await toolkitResponse.json();
+
+        // Compute no_auth from toolkit data
+        const no_auth = toolkitData.composio_managed_auth_schemes?.includes('NO_AUTH') ||
+                        toolkitData.auth_config_details?.some((config: any) => config.mode === 'NO_AUTH') ||
+                        false;
+
+        // Enrich all tools in the list with computed no_auth
+        const enrichedToolsData = {
+            ...toolsData,
+            items: toolsData.items.map((tool: any) => ({
+                ...tool,
+                no_auth
+            }))
+        };
+
+        // Now parse with our schema
+        return ZListResponse(ZTool).parse(enrichedToolsData);
+    } catch (error) {
+        if (isComposioUnavailableError(error)) {
+            logger.log('Returning empty tool list because Composio is unavailable.', {
+                message: error instanceof Error ? error.message : String(error),
+            });
+            return ZListResponse(ZTool).parse(createEmptyListResponse());
+        }
+
+        throw error;
     }
-    
-    const toolsData = await toolsResponse.json();
-    
-    // Check for error response
-    if ('error' in toolsData) {
-        const response = ZErrorResponse.parse(toolsData);
-        throw new Error(`(code: ${response.error.error_code}): ${response.error.message}: ${response.error.suggested_fix}: ${response.error.errors?.join(', ')}`);
-    }
-    
-    // Get toolkit data to compute no_auth for all tools
-    const toolkitUrl = new URL(`${BASE_URL}/toolkits/${toolkitSlug}`);
-    const toolkitResponse = await fetch(toolkitUrl.toString(), {
-        headers: {
-            "x-api-key": COMPOSIO_API_KEY,
-        },
-    });
-    
-    if (!toolkitResponse.ok) {
-        throw new Error(`Failed to fetch toolkit: ${toolkitResponse.status} ${toolkitResponse.statusText}`);
-    }
-    
-    const toolkitData = await toolkitResponse.json();
-    
-    // Compute no_auth from toolkit data
-    const no_auth = toolkitData.composio_managed_auth_schemes?.includes('NO_AUTH') || 
-                    toolkitData.auth_config_details?.some((config: any) => config.mode === 'NO_AUTH') || 
-                    false;
-    
-    // Enrich all tools in the list with computed no_auth
-    const enrichedToolsData = {
-        ...toolsData,
-        items: toolsData.items.map((tool: any) => ({
-            ...tool,
-            no_auth
-        }))
-    };
-    
-    // Now parse with our schema
-    return ZListResponse(ZTool).parse(enrichedToolsData);
 }
 
 export async function getTool(toolSlug: string): Promise<z.infer<typeof ZTool>> {
@@ -213,6 +305,12 @@ export async function getTool(toolSlug: string): Promise<z.infer<typeof ZTool>> 
 }
 
 export async function listAuthConfigs(toolkitSlug: string, cursor: string | null = null, managedOnly: boolean = false): Promise<z.infer<ReturnType<typeof ZListResponse<typeof ZAuthConfig>>>> {
+    const logger = new PrefixLogger('composioApiCall');
+    if (!isComposioConfigured()) {
+        logger.log('Skipping auth config fetch because COMPOSIO_API_KEY is not configured.');
+        return ZListResponse(ZAuthConfig).parse(createEmptyListResponse());
+    }
+
     const url = new URL(`${BASE_URL}/auth_configs`);
     url.searchParams.set("toolkit_slug", toolkitSlug);
     if (cursor) {
@@ -331,6 +429,12 @@ export async function deleteConnectedAccount(connectedAccountId: string): Promis
 }
 
 export async function listTriggersTypes(toolkitSlug: string, cursor?: string): Promise<z.infer<ReturnType<typeof ZListResponse<typeof ZTriggerType>>>> {
+    const logger = new PrefixLogger('composioApiCall');
+    if (!isComposioConfigured()) {
+        logger.log('Skipping trigger type fetch because COMPOSIO_API_KEY is not configured.');
+        return ZListResponse(ZTriggerType).parse(createEmptyListResponse());
+    }
+
     const url = new URL(`${BASE_URL}/triggers_types`);
 
     // set params
@@ -340,7 +444,18 @@ export async function listTriggersTypes(toolkitSlug: string, cursor?: string): P
     }
 
     // fetch
-    return composioApiCall(ZListResponse(ZTriggerType), url.toString());
+    try {
+        return await composioApiCall(ZListResponse(ZTriggerType), url.toString());
+    } catch (error) {
+        if (isComposioUnavailableError(error)) {
+            logger.log('Returning empty trigger type list because Composio is unavailable.', {
+                message: error instanceof Error ? error.message : String(error),
+            });
+            return ZListResponse(ZTriggerType).parse(createEmptyListResponse());
+        }
+
+        throw error;
+    }
 }
 
 export async function getTriggersType(triggerTypeSlug: string): Promise<z.infer<typeof ZTriggerType>> {

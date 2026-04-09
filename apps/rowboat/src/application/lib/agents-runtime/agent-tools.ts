@@ -287,7 +287,7 @@ export async function invokeWebhookTool(
     }
 
     if (!project.webhookUrl) {
-        throw new Error('Webhook URL not found');
+        throw new Error('Webhook URL is not configured for this project. Set it in Settings and retry.');
     }
 
     // prepare request body
@@ -340,9 +340,53 @@ export async function invokeWebhookTool(
         body: JSON.stringify(request),
     });
     if (!response.ok) {
-        throw new Error(`Failed to call webhook: ${response.status}: ${response.statusText}`);
+        const rawBody = await response.text();
+        let message = rawBody;
+
+        try {
+            const parsed = rawBody ? JSON.parse(rawBody) : null;
+            if (parsed && typeof parsed === 'object' && 'error' in parsed && typeof parsed.error === 'string') {
+                message = parsed.error;
+            } else if (parsed && typeof parsed === 'object' && 'message' in parsed && typeof parsed.message === 'string') {
+                message = parsed.message;
+            }
+        } catch {
+            // Keep raw text fallback.
+        }
+
+        throw new Error(`Webhook request failed (${response.status} ${response.statusText})${message ? `: ${message}` : ''}`);
     }
-    const responseBody = await response.json();
+
+    const rawBody = response.status === 204 ? '' : await response.text();
+    if (!rawBody.trim()) {
+        return {
+            ok: true,
+            status: response.status,
+        };
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    let responseBody: unknown = rawBody;
+    const looksLikeJson = rawBody.trim().startsWith('{') || rawBody.trim().startsWith('[');
+    if (contentType.includes('application/json') || looksLikeJson) {
+        try {
+            responseBody = JSON.parse(rawBody);
+        } catch (error) {
+            throw new Error(
+                `Webhook returned invalid JSON${error instanceof Error ? `: ${error.message}` : ''}`
+            );
+        }
+    }
+
+    if (
+        responseBody &&
+        typeof responseBody === 'object' &&
+        'error' in responseBody &&
+        typeof responseBody.error === 'string'
+    ) {
+        throw new Error(responseBody.error);
+    }
+
     return responseBody;
 }
 
@@ -511,6 +555,13 @@ export function createWebhookTool(
     projectId: string,
 ): Tool {
     const { name, description, parameters } = config;
+    const formatWebhookToolError = (error: unknown) => {
+        if (error instanceof Error && error.message) {
+            return error.message;
+        }
+
+        return "Tool execution failed!";
+    };
 
     return tool({
         name,
@@ -531,7 +582,7 @@ export function createWebhookTool(
             } catch (error) {
                 logger.log(`Error executing webhook tool ${config.name}:`, error);
                 return JSON.stringify({
-                    error: "Tool execution failed!",
+                    error: formatWebhookToolError(error),
                 });
             }
         }
@@ -586,6 +637,20 @@ export function createComposioTool(
         throw new Error(`composio data not found for tool ${name}`);
     }
 
+    const formatComposioToolError = (error: unknown) => {
+        const fallback = "Tool execution failed!";
+        if (!(error instanceof Error)) {
+            return fallback;
+        }
+
+        const toolkitLabel = composioData.toolkitName || composioData.toolkitSlug || 'This toolkit';
+        if (error.message.includes('connected account id not found')) {
+            return `${toolkitLabel} is not connected for this project. Connect it in the toolkit settings and retry.`;
+        }
+
+        return error.message || fallback;
+    };
+
     return tool({
         name,
         description,
@@ -605,7 +670,7 @@ export function createComposioTool(
             } catch (error) {
                 logger.log(`Error executing composio tool ${name}:`, error);
                 return JSON.stringify({
-                    error: "Tool execution failed!",
+                    error: formatComposioToolError(error),
                 });
             }
         }

@@ -5,7 +5,7 @@ import fs from "fs";
 import { promises as fsp } from "fs";
 import path from "path";
 import { WorkDir } from "./config/config.js";
-import { RunEvent } from "./entities/run-events.js";
+import { MessageEvent, RunErrorEvent, RunEvent } from "./entities/run-events.js";
 import { createInterface, Interface } from "node:readline/promises";
 import { ToolCallPart } from "./entities/message.js";
 import { Agent } from "./agents/agents.js";
@@ -16,6 +16,9 @@ import { Flavor } from "./models/models.js";
 import { examples } from "./examples/index.js";
 import container from "./di/container.js";
 import { IModelConfigRepo } from "./models/repo.js";
+import { IRunsRepo } from "./runs/repo.js";
+import { IMonotonicallyIncreasingIdGenerator } from "./application/lib/id-gen.js";
+import { IMessageQueue } from "./application/lib/message-queue.js";
 
 function renderGreeting() {
     const logo = `
@@ -41,10 +44,12 @@ export async function app(opts: {
     input?: string;
     noInteractive?: boolean;
 }) {
-    throw new Error("Not implemented");
-    /*
     const renderer = new StreamRenderer();
-    const state = new AgentState(opts.agent, opts.runId);
+    const state = new AgentState();
+    const runsRepo = container.resolve<IRunsRepo>("runsRepo");
+    const idGenerator = container.resolve<IMonotonicallyIncreasingIdGenerator>("idGenerator");
+    const messageQueue = container.resolve<IMessageQueue>("messageQueue");
+    const modelConfigRepo = container.resolve<IModelConfigRepo>("modelConfigRepo");
 
     if (opts.agent === "copilot" && !opts.runId) {
         renderGreeting();
@@ -53,23 +58,17 @@ export async function app(opts: {
     // load existing and assemble state if required
     let runId = opts.runId;
     if (runId) {
-        console.error("loading run", runId);
-        let stream: fs.ReadStream | null = null;
-        let rl: Interface | null = null;
-        try {
-            const logFile = path.join(WorkDir, "runs", `${runId}.jsonl`);
-            stream = fs.createReadStream(logFile, { encoding: "utf8" });
-            rl = createInterface({ input: stream, crlfDelay: Infinity });
-            for await (const line of rl) {
-                if (line.trim() === "") {
-                    continue;
-                }
-                const parsed = JSON.parse(line);
-                const event = RunEvent.parse(parsed);
-                state.ingest(event);
-            }
-        } finally {
-            stream?.close();
+        const run = await runsRepo.fetch(runId);
+        for (const event of run.log) {
+            state.ingest(event);
+        }
+    } else {
+        const run = await runsRepo.create({
+            agentId: opts.agent,
+        });
+        runId = run.id;
+        for (const event of run.log) {
+            state.ingest(event);
         }
     }
 
@@ -78,40 +77,72 @@ export async function app(opts: {
         rl = createInterface({ input, output });
     }
     let inputConsumed = false;
+    if (opts.input) {
+        const event: z.infer<typeof MessageEvent> = {
+            runId: runId!,
+            messageId: await idGenerator.next(),
+            type: "message",
+            message: {
+                role: "user",
+                content: opts.input,
+            },
+            subflow: [],
+        };
+        state.ingest(event);
+        await runsRepo.appendEvents(runId!, [event]);
+        inputConsumed = true;
+    }
 
     try {
         while (true) {
             // ask for pending tool permissions
-            for (const perm of Object.values(state.getPendingPermissions())) {
+            for (const perm of state.getPendingPermissions()) {
                 if (opts.noInteractive) {
                     return;
                 }
                 const response = await getToolCallPermission(perm.toolCall, rl!);
-                state.ingestAndLog({
+                const event = {
                     type: "tool-permission-response",
+                    runId: runId!,
                     response,
                     toolCallId: perm.toolCall.toolCallId,
                     subflow: perm.subflow,
-                });
+                } as const;
+                state.ingest(event);
+                await runsRepo.appendEvents(runId!, [event]);
             }
 
             // ask for pending human input
-            for (const ask of Object.values(state.getPendingAskHumans())) {
+            for (const ask of state.getPendingAskHumans()) {
                 if (opts.noInteractive) {
                     return;
                 }
                 const response = await getAskHumanResponse(ask.query, rl!);
-                state.ingestAndLog({
+                const event = {
                     type: "ask-human-response",
+                    runId: runId!,
                     response,
                     toolCallId: ask.toolCallId,
                     subflow: ask.subflow,
-                });
+                } as const;
+                state.ingest(event);
+                await runsRepo.appendEvents(runId!, [event]);
             }
 
             // run one turn
-            for await (const event of streamAgent(state)) {
+            let eventCount = 0;
+            for await (const event of streamAgent({
+                state,
+                idGenerator,
+                runId: runId!,
+                messageQueue,
+                modelConfigRepo,
+            })) {
+                eventCount++;
                 renderer.render(event);
+                if (event.type !== "llm-stream-event") {
+                    await runsRepo.appendEvents(runId!, [event]);
+                }
                 if (event?.type === "error") {
                     process.exitCode = 1;
                 }
@@ -119,36 +150,44 @@ export async function app(opts: {
 
             // if nothing pending, get user input
             if (state.getPendingPermissions().length === 0 && state.getPendingAskHumans().length === 0) {
-                if (opts.input && !inputConsumed) {
-                    state.ingestAndLog({
-                        type: "message",
-                        message: {
-                            role: "user",
-                            content: opts.input,
-                        },
-                        subflow: [],
-                    });
-                    inputConsumed = true;
-                    continue;
-                }
                 if (opts.noInteractive) {
                     return;
                 }
                 const response = await getUserInput(rl!);
-                state.ingestAndLog({
+                const event: z.infer<typeof MessageEvent> = {
+                    runId: runId!,
+                    messageId: await idGenerator.next(),
                     type: "message",
                     message: {
                         role: "user",
                         content: response,
                     },
                     subflow: [],
-                });
+                };
+                state.ingest(event);
+                await runsRepo.appendEvents(runId!, [event]);
+                inputConsumed = true;
+                continue;
+            }
+
+            if (!eventCount && opts.noInteractive && inputConsumed) {
+                return;
             }
         }
+    } catch (error) {
+        const message = error instanceof Error ? (error.stack || error.message) : String(error);
+        const event: z.infer<typeof RunErrorEvent> = {
+            runId: runId!,
+            type: "error",
+            error: message,
+            subflow: [],
+        };
+        renderer.render(event);
+        await runsRepo.appendEvents(runId!, [event]);
+        process.exitCode = 1;
     } finally {
         rl?.close();
     }
-    */
 }
 
 async function getToolCallPermission(

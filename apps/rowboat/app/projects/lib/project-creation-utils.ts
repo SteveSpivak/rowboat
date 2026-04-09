@@ -1,6 +1,7 @@
 "use client";
 
 import { createProject, createProjectFromWorkflowJson } from "@/app/actions/project.actions";
+import { storageSetItem } from "@/app/lib/browser-storage";
 
 export interface CreateProjectOptions {
   template?: string;
@@ -33,12 +34,12 @@ export async function createProjectWithOptions(options: CreateProjectOptions): P
     if ('id' in response) {
       // Store prompt in localStorage if provided
       if (options.prompt?.trim()) {
-        localStorage.setItem(`project_prompt_${response.id}`, options.prompt);
+        storageSetItem(`project_prompt_${response.id}`, options.prompt);
       }
       // If the project was created from a template (pre-built agent),
       // mark the Build step as completed in localStorage for the progress bar.
       if (options.template) {
-        localStorage.setItem(`agent_instructions_changed_${response.id}`, 'true');
+        storageSetItem(`agent_instructions_changed_${response.id}`, 'true');
       }
       
       // Call success callback if provided
@@ -83,7 +84,7 @@ export async function createProjectFromJsonWithOptions(options: CreateProjectFro
         options.onSuccess(response.id);
       }
       // Project created from imported JSON: mark Build step as completed
-      localStorage.setItem(`agent_instructions_changed_${response.id}`, 'true');
+      storageSetItem(`agent_instructions_changed_${response.id}`, 'true');
       
       // Navigate to workflow page
       options.router.push(`/projects/${response.id}/workflow`);

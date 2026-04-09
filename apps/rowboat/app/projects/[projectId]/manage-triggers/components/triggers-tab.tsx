@@ -18,6 +18,7 @@ import { ToolkitAuthModal } from '../../tools/components/ToolkitAuthModal';
 import { ZToolkit } from "@/src/application/lib/composio/types";
 import { Project } from "@/src/entities/models/project";
 import { fetchProject } from '@/app/actions/project.actions';
+import { USE_COMPOSIO_TOOLS } from '@/app/lib/feature_flags';
 
 type TriggerDeployment = z.infer<typeof ComposioTriggerDeployment>;
 
@@ -196,16 +197,25 @@ export function TriggersTab({ projectId }: { projectId: string }) {
   };
 
   useEffect(() => {
+    if (!USE_COMPOSIO_TOOLS) {
+      return;
+    }
     loadProjectConfig();
   }, [loadProjectConfig]);
 
   useEffect(() => {
+    if (!USE_COMPOSIO_TOOLS) {
+      return;
+    }
     if (!showCreateFlow) {
       loadTriggers();
     }
   }, [showCreateFlow, loadTriggers]);
 
   useEffect(() => {
+    if (!USE_COMPOSIO_TOOLS) {
+      return;
+    }
     if (!loading && !error && triggers.length === 0 && !showCreateFlow) {
       setShowCreateFlow(true);
     }
@@ -503,9 +513,27 @@ export function TriggersTab({ projectId }: { projectId: string }) {
     );
   };
 
+  const renderDisabledState = () => (
+    <Panel
+      title={
+        <div className="text-base font-normal text-gray-900 dark:text-gray-100">
+          External triggers are disabled
+        </div>
+      }
+    >
+      <div className="h-full overflow-auto px-4 py-4">
+        <div className="max-w-[1024px] mx-auto">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+            This local workspace is configured to use webhook and CLI-backed flows instead of Composio. Use one-time or recurring triggers here, connect webhook tools to n8n, or schedule Codex automations outside the app when you need fully local orchestration.
+          </div>
+        </div>
+      </div>
+    </Panel>
+  );
+
   return (
     <>
-      {showCreateFlow ? renderCreateFlow() : renderTriggerList()}
+      {USE_COMPOSIO_TOOLS ? (showCreateFlow ? renderCreateFlow() : renderTriggerList()) : renderDisabledState()}
       
       {/* Auth Modal */}
       {selectedToolkit && (

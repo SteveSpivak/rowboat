@@ -4,6 +4,11 @@ import fsp from 'fs/promises';
 import readline from 'readline';
 import { execFile } from 'child_process';
 import { WorkDir } from '../config/config.js';
+import {
+  absExternalToRelPosix,
+  listExternalMounts,
+  listMountedMarkdownFiles,
+} from '../workspace/external_sources.js';
 
 interface SearchResult {
   type: 'knowledge' | 'chat';
@@ -43,7 +48,7 @@ export async function search(query: string, limit = 20, types?: SearchType[]): P
  * Search knowledge markdown files by content and filename.
  */
 async function searchKnowledge(query: string, limit: number): Promise<SearchResult[]> {
-  if (!fs.existsSync(KNOWLEDGE_DIR)) {
+  if (!fs.existsSync(KNOWLEDGE_DIR) && listExternalMounts().length === 0) {
     return [];
   }
 
@@ -53,10 +58,10 @@ async function searchKnowledge(query: string, limit: number): Promise<SearchResu
 
   // Content search via grep
   try {
-    const grepMatches = await grepFiles(query, KNOWLEDGE_DIR, '*.md');
+    const grepMatches = fs.existsSync(KNOWLEDGE_DIR) ? await grepFiles(query, KNOWLEDGE_DIR, '*.md') : [];
     for (const match of grepMatches) {
       if (results.length >= limit) break;
-      const relPath = path.relative(WorkDir, match.file);
+      const relPath = toWorkspaceRelPath(match.file);
       if (seenPaths.has(relPath)) continue;
       seenPaths.add(relPath);
 
@@ -72,12 +77,63 @@ async function searchKnowledge(query: string, limit: number): Promise<SearchResu
     // grep failed (no matches or dir issue) — continue
   }
 
+  // Content search across live external mounts
+  try {
+    for (const mount of listExternalMounts()) {
+      if (results.length >= limit) break;
+
+      if (mount.type === 'directory') {
+        const grepMatches = await grepFiles(query, mount.sourcePath, '*.md');
+        for (const match of grepMatches) {
+          if (results.length >= limit) break;
+          const relPath = toWorkspaceRelPath(match.file);
+          if (seenPaths.has(relPath)) continue;
+          seenPaths.add(relPath);
+
+          const title = path.basename(match.file, '.md');
+          results.push({
+            type: 'knowledge',
+            title,
+            preview: match.line.trim().substring(0, 150),
+            path: relPath,
+          });
+        }
+        continue;
+      }
+
+      for (const fileName of mount.allowedFiles ?? []) {
+        if (results.length >= limit) break;
+        if (!fileName.endsWith('.md')) continue;
+        const filePath = path.join(mount.sourcePath, fileName);
+        if (!fs.existsSync(filePath)) continue;
+        const line = await getFirstMatchingLine(filePath, query);
+        if (!line) continue;
+
+        const relPath = toWorkspaceRelPath(filePath);
+        if (seenPaths.has(relPath)) continue;
+        seenPaths.add(relPath);
+
+        results.push({
+          type: 'knowledge',
+          title: path.basename(filePath, '.md'),
+          preview: line.trim().substring(0, 150),
+          path: relPath,
+        });
+      }
+    }
+  } catch {
+    // ignore errors from external sources
+  }
+
   // Filename search — check files whose name matches the query
   try {
-    const allFiles = await listMarkdownFiles(KNOWLEDGE_DIR);
+    const allFiles = [
+      ...(fs.existsSync(KNOWLEDGE_DIR) ? await listMarkdownFiles(KNOWLEDGE_DIR) : []),
+      ...listMountedMarkdownFiles(),
+    ];
     for (const file of allFiles) {
       if (results.length >= limit) break;
-      const relPath = path.relative(WorkDir, file);
+      const relPath = toWorkspaceRelPath(file);
       if (seenPaths.has(relPath)) continue;
 
       const basename = path.basename(file, '.md');
@@ -97,6 +153,10 @@ async function searchKnowledge(query: string, limit: number): Promise<SearchResu
   }
 
   return results;
+}
+
+function toWorkspaceRelPath(absPath: string): string {
+  return absExternalToRelPosix(absPath) ?? path.relative(WorkDir, absPath);
 }
 
 /**

@@ -14,9 +14,7 @@ import { buildCopilotAgent } from "../application/assistant/agent.js";
 import { isBlocked, extractCommandNames } from "../application/lib/command-executor.js";
 import container from "../di/container.js";
 import { IModelConfigRepo } from "../models/repo.js";
-import { createProvider } from "../models/models.js";
-import { isSignedIn } from "../account/account.js";
-import { getGatewayProvider } from "../models/gateway.js";
+import { resolveProvider } from "../models/models.js";
 import { IAgentsRepo } from "./repo.js";
 import { IMonotonicallyIncreasingIdGenerator } from "../application/lib/id-gen.js";
 import { IBus } from "../application/lib/bus.js";
@@ -850,16 +848,13 @@ export async function* streamAgent({
     const tools = await buildTools(agent);
 
     // set up provider + model
-    const signedIn = await isSignedIn();
-    const provider = signedIn
-        ? await getGatewayProvider()
-        : createProvider(modelConfig.provider);
+    const { provider, usingGateway } = await resolveProvider(modelConfig.provider);
     const knowledgeGraphAgents = ["note_creation", "email-draft", "meeting-prep", "labeling_agent", "note_tagging_agent", "agent_notes_agent"];
     const isKgAgent = knowledgeGraphAgents.includes(state.agentName!);
     const isInlineTaskAgent = state.agentName === "inline_task_agent";
-    const defaultModel = signedIn ? "gpt-5.4" : modelConfig.model;
-    const defaultKgModel = signedIn ? "gpt-5.4-mini" : defaultModel;
-    const defaultInlineTaskModel = signedIn ? "gpt-5.4" : defaultModel;
+    const defaultModel = usingGateway ? "gpt-5.4" : modelConfig.model;
+    const defaultKgModel = usingGateway ? "gpt-5.4-mini" : defaultModel;
+    const defaultInlineTaskModel = usingGateway ? "gpt-5.4" : defaultModel;
     const modelId = isInlineTaskAgent
         ? defaultInlineTaskModel
         : (isKgAgent && modelConfig.knowledgeGraphModel)

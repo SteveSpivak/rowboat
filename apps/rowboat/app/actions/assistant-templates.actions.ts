@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { authCheck } from "./auth.actions";
 import { MongoDBAssistantTemplatesRepository } from '@/src/infrastructure/repositories/mongodb.assistant-templates.repository';
-import { prebuiltTemplates } from '@/app/lib/prebuilt-cards';
+import { listPrebuiltTemplates, resolvePrebuiltTemplate } from '@/app/lib/prebuilt-cards';
 import { USE_AUTH } from '@/app/lib/feature_flags';
 // import { ensureLibraryTemplatesSeeded } from '@/app/lib/assistant_templates_seed';
 
@@ -41,13 +41,13 @@ const CreateTemplateSchema = z.object({
 type ListResponse = { items: any[]; nextCursor: string | null };
 
 function buildPrebuiltList(params: z.infer<typeof ListTemplatesSchema>): ListResponse {
-    const allPrebuilt = Object.entries(prebuiltTemplates).map(([key, tpl]) => ({
-        id: `prebuilt:${key}`,
-        name: (tpl as any).name || key,
-        description: (tpl as any).description || '',
-        category: (tpl as any).category || 'Other',
-        tools: (tpl as any).tools || [],
-        createdAt: (tpl as any).lastUpdatedAt || undefined,
+    const allPrebuilt = listPrebuiltTemplates().map(({ id, template }) => ({
+        id: `prebuilt:${id}`,
+        name: (template as any).name || id,
+        description: (template as any).description || '',
+        category: (template as any).category || 'Other',
+        tools: (template as any).tools || [],
+        createdAt: (template as any).lastUpdatedAt || undefined,
         source: 'library' as const,
     }));
 
@@ -118,8 +118,9 @@ export async function getAssistantTemplate(templateId: string) {
     // Prebuilt: load directly from code
     if (templateId.startsWith('prebuilt:')) {
         const key = templateId.replace('prebuilt:', '');
-        const originalTemplate = prebuiltTemplates[key as keyof typeof prebuiltTemplates];
-        if (!originalTemplate) throw new Error('Template not found');
+        const entry = resolvePrebuiltTemplate(key);
+        if (!entry) throw new Error('Template not found');
+        const originalTemplate = entry.template;
 
         const defaultModel = process.env.PROVIDER_DEFAULT_MODEL || 'gpt-4.1';
         const transformedWorkflow = JSON.parse(JSON.stringify(originalTemplate));
@@ -134,13 +135,18 @@ export async function getAssistantTemplate(templateId: string) {
         // Return minimal shape expected by callers
         const result = {
             id: templateId,
-            name: (originalTemplate as any).name || key,
+            name: (originalTemplate as any).name || entry.id,
             description: (originalTemplate as any).description || '',
             category: (originalTemplate as any).category || 'Other',
             workflow: transformedWorkflow,
             source: 'library' as const,
         };
         return serializeTemplate(result);
+    }
+
+    const prebuiltEntry = resolvePrebuiltTemplate(templateId);
+    if (prebuiltEntry) {
+        return getAssistantTemplate(`prebuilt:${prebuiltEntry.id}`);
     }
 
     // Community template from DB
