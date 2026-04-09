@@ -5,12 +5,14 @@ interface RowboatMentionPopoverProps {
   open: boolean
   anchor: { top: number; left: number; width: number } | null
   initialText?: string
+  prefix?: string
+  loadingText?: string
   onAdd: (instruction: string) => void | Promise<void>
   onRemove?: () => void
   onClose: () => void
 }
 
-export function RowboatMentionPopover({ open, anchor, initialText = '', onAdd, onRemove, onClose }: RowboatMentionPopoverProps) {
+export function RowboatMentionPopover({ open, anchor, initialText = '', prefix = '@rowboat', loadingText, onAdd, onRemove, onClose }: RowboatMentionPopoverProps) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -64,7 +66,7 @@ export function RowboatMentionPopover({ open, anchor, initialText = '', onAdd, o
     >
       <div className="relative border border-input rounded-md bg-popover shadow-sm">
         <div className="flex items-start gap-1.5 px-3 pt-2 pb-8">
-          <span className="text-sm text-muted-foreground select-none shrink-0 leading-[1.5]">@rowboat</span>
+          <span className="text-sm text-muted-foreground select-none shrink-0 leading-[1.5]">{prefix}</span>
           <textarea
             ref={textareaRef}
             className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none resize-none leading-[1.5]"
@@ -100,7 +102,12 @@ export function RowboatMentionPopover({ open, anchor, initialText = '', onAdd, o
             disabled={!text.trim() || loading}
             onClick={() => void handleSubmit()}
           >
-            {loading ? <Loader2 className="size-3 animate-spin" /> : 'Add'}
+            {loading ? (
+              <>
+                <Loader2 className="size-3 animate-spin" />
+                {loadingText && <span className="ml-1">{loadingText}</span>}
+              </>
+            ) : 'Add'}
           </button>
         </div>
       </div>

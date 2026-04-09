@@ -559,6 +559,16 @@ const ipcSchemas = {
       response: z.string().nullable(),
     }),
   },
+  // Track channels
+  'track:rerun': {
+    req: z.object({
+      trackId: z.string(),
+      filePath: z.string(),
+    }),
+    res: z.object({
+      success: z.boolean(),
+    }),
+  },
   // Billing channels
   'billing:getInfo': {
     req: z.null(),

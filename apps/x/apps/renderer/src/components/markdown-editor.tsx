@@ -9,6 +9,7 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { ImageUploadPlaceholderExtension, createImageUploadHandler } from '@/extensions/image-upload'
 import { TaskBlockExtension } from '@/extensions/task-block'
+import { TrackBlockExtension } from '@/extensions/track-block'
 import { ImageBlockExtension } from '@/extensions/image-block'
 import { EmbedBlockExtension } from '@/extensions/embed-block'
 import { ChartBlockExtension } from '@/extensions/chart-block'
@@ -467,6 +468,10 @@ export function MarkdownEditor({
   const [rowboatAnchorTop, setRowboatAnchorTop] = useState<{ top: number; left: number; width: number } | null>(null)
   const rowboatBlockEditRef = useRef<RowboatBlockEdit | null>(null)
 
+  // @track mention state
+  const [activeTrackMention, setActiveTrackMention] = useState<RowboatMentionMatch | null>(null)
+  const [trackAnchorTop, setTrackAnchorTop] = useState<{ top: number; left: number; width: number } | null>(null)
+
   // @ mention autocomplete state (analogous to wiki-link state)
   const [activeAtMention, setActiveAtMention] = useState<{ range: { from: number; to: number }; query: string } | null>(null)
   const [atAnchorPosition, setAtAnchorPosition] = useState<{ left: number; top: number } | null>(null)
@@ -569,6 +574,7 @@ export function MarkdownEditor({
       }),
       ImageUploadPlaceholderExtension,
       TaskBlockExtension,
+      TrackBlockExtension.configure({ notePath }),
       ImageBlockExtension,
       EmbedBlockExtension,
       ChartBlockExtension,
@@ -791,6 +797,8 @@ export function MarkdownEditor({
     if (!selection.empty) {
       setActiveRowboatMention(null)
       setRowboatAnchorTop(null)
+      setActiveTrackMention(null)
+      setTrackAnchorTop(null)
       return
     }
 
@@ -798,40 +806,62 @@ export function MarkdownEditor({
     if ($from.parent.type.spec.code) {
       setActiveRowboatMention(null)
       setRowboatAnchorTop(null)
+      setActiveTrackMention(null)
+      setTrackAnchorTop(null)
       return
     }
 
     const text = $from.parent.textBetween(0, $from.parent.content.size, '\n', '\n')
     const textBefore = text.slice(0, $from.parentOffset)
 
+    // Helper to compute anchor position
+    const computeAnchor = () => {
+      const wrapper = wrapperRef.current
+      if (!wrapper) return null
+      const coords = editor.view.coordsAtPos(selection.from)
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const proseMirrorEl = wrapper.querySelector('.ProseMirror') as HTMLElement | null
+      const pmRect = proseMirrorEl?.getBoundingClientRect()
+      return {
+        top: coords.top - wrapperRect.top + wrapper.scrollTop,
+        left: pmRect ? pmRect.left - wrapperRect.left : 0,
+        width: pmRect ? pmRect.width : wrapperRect.width,
+      }
+    }
+
     // Match @rowboat at a word boundary (preceded by nothing or whitespace)
-    const match = textBefore.match(/(^|\s)@rowboat$/)
-    if (!match) {
+    const rowboatMatch = textBefore.match(/(^|\s)@rowboat$/)
+    if (rowboatMatch) {
+      setActiveTrackMention(null)
+      setTrackAnchorTop(null)
+
+      const triggerStart = textBefore.length - '@rowboat'.length
+      const from = selection.from - (textBefore.length - triggerStart)
+      const to = selection.from
+      setActiveRowboatMention({ range: { from, to } })
+      setRowboatAnchorTop(computeAnchor())
+      return
+    }
+
+    // Match @track at a word boundary
+    const trackMatch = textBefore.match(/(^|\s)@track$/)
+    if (trackMatch) {
       setActiveRowboatMention(null)
       setRowboatAnchorTop(null)
+
+      const triggerStart = textBefore.length - '@track'.length
+      const from = selection.from - (textBefore.length - triggerStart)
+      const to = selection.from
+      setActiveTrackMention({ range: { from, to } })
+      setTrackAnchorTop(computeAnchor())
       return
     }
 
-    const triggerStart = textBefore.length - '@rowboat'.length
-    const from = selection.from - (textBefore.length - triggerStart)
-    const to = selection.from
-    setActiveRowboatMention({ range: { from, to } })
-
-    const wrapper = wrapperRef.current
-    if (!wrapper) {
-      setRowboatAnchorTop(null)
-      return
-    }
-
-    const coords = editor.view.coordsAtPos(selection.from)
-    const wrapperRect = wrapper.getBoundingClientRect()
-    const proseMirrorEl = wrapper.querySelector('.ProseMirror') as HTMLElement | null
-    const pmRect = proseMirrorEl?.getBoundingClientRect()
-    setRowboatAnchorTop({
-      top: coords.top - wrapperRect.top + wrapper.scrollTop,
-      left: pmRect ? pmRect.left - wrapperRect.left : 0,
-      width: pmRect ? pmRect.width : wrapperRect.width,
-    })
+    // No match
+    setActiveRowboatMention(null)
+    setRowboatAnchorTop(null)
+    setActiveTrackMention(null)
+    setTrackAnchorTop(null)
   }, [editor])
 
   // Detect @ trigger for autocomplete popover (similar to [[ detection)
@@ -1213,6 +1243,45 @@ export function MarkdownEditor({
     setRowboatAnchorTop(null)
   }, [editor, rowboatBlockEdit])
 
+  const handleTrackSubmit = useCallback(async (instruction: string) => {
+    if (!editor || !activeTrackMention || !notePath) return
+
+    // Remove the @track text from the editor
+    editor.chain().focus().deleteRange(activeTrackMention.range).run()
+    setActiveTrackMention(null)
+
+    // Create a background copilot run
+    const run = await window.ipc.invoke('runs:create', { agentId: 'copilot' })
+
+    const message = [
+      `[TRACK REQUEST] Create a track block in this note.`,
+      ``,
+      `First, load the "create-track" skill for guidance. Then create the track block.`,
+      ``,
+      `User's request: "${instruction}"`,
+      `Note path: ${notePath}`,
+    ].join('\n')
+
+    await window.ipc.invoke('runs:createMessage', {
+      runId: run.id,
+      message: [
+        { type: 'attachment', path: notePath, filename: notePath.split('/').pop() ?? 'note.md', mimeType: 'text/markdown' },
+        { type: 'text', text: message },
+      ] as unknown as string,
+    })
+
+    // Wait for run completion to dismiss spinner
+    return new Promise<void>((resolve) => {
+      const cleanup = window.ipc.on('runs:events', ((event: unknown) => {
+        const e = event as { type: string; runId: string }
+        if (e.runId === run.id && (e.type === 'run-processing-end' || e.type === 'error' || e.type === 'run-stopped')) {
+          cleanup()
+          resolve()
+        }
+      }) as (event: null) => void)
+    })
+  }, [editor, activeTrackMention, notePath])
+
   const handleScroll = useCallback(() => {
     updateWikiLinkState()
     updateAtMentionState()
@@ -1443,6 +1512,17 @@ export function MarkdownEditor({
             setRowboatBlockEdit(null)
             rowboatBlockEditRef.current = null
             setRowboatAnchorTop(null)
+          }}
+        />
+        <RowboatMentionPopover
+          open={Boolean(activeTrackMention && trackAnchorTop)}
+          anchor={trackAnchorTop}
+          prefix="@track"
+          loadingText="Setting up track..."
+          onAdd={handleTrackSubmit}
+          onClose={() => {
+            setActiveTrackMention(null)
+            setTrackAnchorTop(null)
           }}
         />
       </div>

@@ -1,0 +1,18 @@
+- in ParsedTrack schema, not sure why we need startLine and endLine. We should discard this as this information might be outdated by the time we're ready to replace content
+- also, what does blockData contain?
+- i want you to plan the "scanner" from scratch and not look at inline tasks. Basically:
+  - have a function that will use fs.readdir(recursive, withfiletypes), that will only pick .md files. send each filepath to extractTracks(filepath)
+  - extractTracks(filepath) reads the file line-by-line. If the current line is exactly "```track", then read content until ending code-fence is read. Attempt to parse as track block json (zod parse)
+  - write the code for these functions (high-level) in the plan
+- writeTrackResult signature should be (filePath, trackId, content). This function should auto-find a target output region with the id related to track id. If not found, it should create it just below the ending code-fence of the respective track (write code for this fund function in the plan)
+- not sure why we need updateTrackBlockData?? I'm guessing track can have a lastRunAt time that can be auto-updated by writeTrackResult itself?
+
+
+furthermore I'm not sure how the worker logic is being planned out here. What I had in mind was that the sync scripts (which exist today, like the Gmail sync) create event files on this. For example, we can have an events directory inside the work directory (which is a daughter of work). Inside the events directory, there should be two subdirectories: pending and done.
+
+So, for example, when the Gmail sync script runs and finishes, let's say it has found 10 emails, it fetched 10 emails, it should create an event file for each of those emails. 10 event files lined up in the pending directory.
+
+Now, on the other hand, there is a worker loop which polls the pending directory. By the way, the files that were created should use the monotonically increasing ID. So that they are sorted by time. We are already using that ID for generating run IDs, so just check in the code there is a class to do that.
+
+So, anyway, back to the worker. The worker loop wakes up, does a read directory call on this pending directory, picks let's say 5 files at one go, then for each of those files, I think what it should do is concurrently fire off promises. Each of those callbacks basically does a do pass LLM thing. That is the architecture I had in mind. Can you revise it accordingly or let me know if you see any issues?
+

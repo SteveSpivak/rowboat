@@ -1324,4 +1324,23 @@ export const BuiltinTools: z.infer<typeof BuiltinToolsSchema> = {
         },
         isAvailable: async () => isComposioConfigured(),
     },
+    'update-track-content': {
+        description: "Update the output content of a track block in a knowledge note. This replaces the content inside the track's target region (between <!--track-target:ID--> markers), or creates the target region if it doesn't exist. Also updates the track's lastRunAt timestamp.",
+        inputSchema: z.object({
+            filePath: z.string().describe("Workspace-relative path to the note file (e.g., 'knowledge/Notes/my-note.md')"),
+            trackId: z.string().describe("The track block's trackId"),
+            content: z.string().describe("The new content to place inside the track's target region"),
+        }),
+        execute: async ({ filePath, trackId, content }: { filePath: string; trackId: string; content: string }) => {
+            const { writeTrackResult } = await import("../../knowledge/track/scanner.js");
+            const fullPath = path.join(WorkDir, filePath);
+            try {
+                writeTrackResult(fullPath, trackId, content);
+                return { success: true, message: `Updated track ${trackId} in ${filePath}` };
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return { success: false, error: msg };
+            }
+        },
+    },
 };

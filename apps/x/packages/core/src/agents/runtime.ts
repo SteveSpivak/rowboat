@@ -11,6 +11,7 @@ import { execTool } from "../application/lib/exec-tool.js";
 import { AskHumanRequestEvent, RunEvent, ToolPermissionRequestEvent } from "@x/shared/dist/runs.js";
 import { BuiltinTools } from "../application/lib/builtin-tools.js";
 import { buildCopilotAgent } from "../application/assistant/agent.js";
+import { CopilotAgent, CopilotBackgroundAgent } from "../application/assistant/agent.js";
 import { isBlocked, extractCommandNames } from "../application/lib/command-executor.js";
 import container from "../di/container.js";
 import { IModelConfigRepo } from "../models/repo.js";
@@ -370,6 +371,10 @@ function formatLlmStreamError(rawError: unknown): string {
 export async function loadAgent(id: string): Promise<z.infer<typeof Agent>> {
     if (id === "copilot" || id === "rowboatx") {
         return buildCopilotAgent();
+    }
+
+    if (id === "copilot-background") {
+        return CopilotBackgroundAgent;
     }
 
     if (id === 'note_creation') {
@@ -1040,7 +1045,7 @@ export async function* streamAgent({
         });
         let instructionsWithDateTime = `Current date and time: ${currentDateTime}\n\n${agent.instructions}`;
         // Inject Agent Notes context for copilot
-        if (state.agentName === 'copilot' || state.agentName === 'rowboatx') {
+        if (state.agentName === 'copilot' || state.agentName === 'rowboatx' || state.agentName === 'copilot-background') {
             const agentNotesContext = loadAgentNotesContext();
             if (agentNotesContext) {
                 instructionsWithDateTime += `\n\n${agentNotesContext}`;

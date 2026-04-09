@@ -12,6 +12,7 @@ import createPresentationsSkill from "./create-presentations/skill.js";
 
 import appNavigationSkill from "./app-navigation/skill.js";
 import composioIntegrationSkill from "./composio-integration/skill.js";
+import createTrackSkill from "./create-track/skill.js";
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CATALOG_PREFIX = "src/application/assistant/skills";
@@ -95,6 +96,12 @@ const definitions: SkillDefinition[] = [
     title: "App Navigation",
     summary: "Navigate the app UI - open notes, switch views, filter/search the knowledge base, and manage saved views.",
     content: appNavigationSkill,
+  },
+  {
+    id: "create-track",
+    title: "Create Track Block",
+    summary: "Create a track block in a knowledge note that auto-updates with incoming events (emails, meetings, messages).",
+    content: createTrackSkill,
   },
 ];
 

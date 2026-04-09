@@ -9,6 +9,7 @@ import { serviceLogger, type ServiceRunContext } from '../services/service_logge
 import { limitEventItems } from './limit_event_items.js';
 import { executeAction, useComposioForGoogleCalendar } from '../composio/client.js';
 import { composioAccountsRepo } from '../composio/repo.js';
+import { writeEventFile } from './track/events.js';
 
 // Configuration
 const SYNC_DIR = path.join(WorkDir, 'calendar_sync');
@@ -228,7 +229,6 @@ async function syncCalendarWindow(auth: OAuth2Client, syncDir: string, lookbackD
                     const result = await saveEvent(event, syncDir);
                     const attachmentsSaved = await processAttachments(drive, event, syncDir);
                     currentEventIds.add(event.id);
-
                     if (result.changed) {
                         await ensureRun();
                         changedTitles.push(result.title);
@@ -242,6 +242,16 @@ async function syncCalendarWindow(auth: OAuth2Client, syncDir: string, lookbackD
                     if (attachmentsSaved > 0) {
                         await ensureRun();
                         attachmentCount += attachmentsSaved;
+                    }
+
+                    if (result.changed) {
+                        const eventTime = event.start?.dateTime || event.start?.date || new Date().toISOString();
+                        await writeEventFile({
+                            source: 'calendar',
+                            type: result.isNew ? 'event.created' : 'event.updated',
+                            createdAt: eventTime,
+                            payload: JSON.stringify(event, null, 2),
+                        });
                     }
                 }
             }
@@ -505,6 +515,14 @@ async function performSyncComposio() {
                             } else {
                                 updatedCount++;
                             }
+
+                            const eventTime = new Date().toISOString();
+                            await writeEventFile({
+                                source: 'calendar',
+                                type: saveResult.isNew ? 'event.created' : 'event.updated',
+                                createdAt: eventTime,
+                                payload: JSON.stringify(event, null, 2),
+                            });
                         }
                     }
                 }

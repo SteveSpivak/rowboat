@@ -4,6 +4,7 @@ import { WorkDir } from '../config/config.js';
 import { FirefliesClientFactory } from './fireflies-client-factory.js';
 import { serviceLogger, type ServiceRunContext } from '../services/service_logger.js';
 import { limitEventItems } from './limit_event_items.js';
+import { writeEventFile } from './track/events.js';
 
 // Configuration
 const SYNC_DIR = path.join(WorkDir, 'knowledge', 'Meetings', 'fireflies');
@@ -582,6 +583,13 @@ async function syncMeetings() {
                 
                 fs.writeFileSync(filePath, markdown);
                 console.log(`[Fireflies] Saved: ${filename}`);
+
+                await writeEventFile({
+                    source: 'meeting',
+                    type: 'meeting.synced',
+                    createdAt: meetingDate.toISOString(),
+                    payload: markdown,
+                });
 
                 syncedIds.add(meetingId);
                 newCount++;

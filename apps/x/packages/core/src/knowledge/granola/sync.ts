@@ -6,6 +6,7 @@ import container from '../../di/container.js';
 import { IGranolaConfigRepo } from './repo.js';
 import { serviceLogger } from '../../services/service_logger.js';
 import { limitEventItems } from '../limit_event_items.js';
+import { writeEventFile } from '../track/events.js';
 import {
     GetDocumentsResponse,
     SyncState,
@@ -432,6 +433,13 @@ async function syncNotes(): Promise<void> {
                 const filePath = path.join(dateDir, filename);
 
                 fs.writeFileSync(filePath, markdown);
+
+                await writeEventFile({
+                    source: 'meeting',
+                    type: lastSyncedAt ? 'meeting.updated' : 'meeting.synced',
+                    createdAt: docDate.toISOString(),
+                    payload: markdown,
+                });
 
                 if (lastSyncedAt) {
                     console.log(`[Granola] Updated: ${filename}`);

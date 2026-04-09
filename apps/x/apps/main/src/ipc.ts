@@ -44,6 +44,7 @@ import { getBillingInfo } from '@x/core/dist/billing/billing.js';
 import { summarizeMeeting } from '@x/core/dist/knowledge/summarize_meeting.js';
 import { getAccessToken } from '@x/core/dist/auth/tokens.js';
 import { getRowboatConfig } from '@x/core/dist/config/rowboat.js';
+import { triggerTrackUpdate } from '@x/core/dist/knowledge/track/runner.js';
 
 /**
  * Convert markdown to a styled HTML document for PDF/DOCX export.
@@ -754,6 +755,12 @@ export function setupIpcHandlers() {
     },
     'voice:synthesize': async (_event, args) => {
       return voice.synthesizeSpeech(args.text);
+    },
+    // Track handler
+    'track:rerun': async (_event, args) => {
+      const fullPath = path.join(os.homedir(), '.rowboat', args.filePath);
+      const result = await triggerTrackUpdate(args.trackId, fullPath);
+      return { success: !result.error };
     },
     // Billing handler
     'billing:getInfo': async () => {

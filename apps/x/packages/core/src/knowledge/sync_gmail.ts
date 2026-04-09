@@ -9,6 +9,7 @@ import { serviceLogger, type ServiceRunContext } from '../services/service_logge
 import { limitEventItems } from './limit_event_items.js';
 import { executeAction, useComposioForGoogle } from '../composio/client.js';
 import { composioAccountsRepo } from '../composio/repo.js';
+import { writeEventFile } from './track/events.js';
 
 // Configuration
 const SYNC_DIR = path.join(WorkDir, 'gmail_sync');
@@ -171,6 +172,13 @@ async function processThread(auth: OAuth2Client, threadId: string, syncDir: stri
 
         fs.writeFileSync(path.join(syncDir, `${threadId}.md`), mdContent);
         console.log(`Synced Thread: ${subject} (${threadId})`);
+
+        await writeEventFile({
+            source: 'gmail',
+            type: 'email.synced',
+            createdAt: new Date().toISOString(),
+            payload: mdContent,
+        });
 
     } catch (error) {
         console.error(`Error processing thread ${threadId}:`, error);
@@ -596,6 +604,13 @@ async function processThreadComposio(connectedAccountId: string, threadId: strin
         fs.writeFileSync(path.join(syncDir, `${cleanFilename(threadId)}.md`), mdContent);
         console.log(`[Gmail] Synced Thread: ${parsed.subject} (${threadId})`);
         newestDate = tryParseDate(parsed.date);
+
+        await writeEventFile({
+            source: 'gmail',
+            type: 'email.synced',
+            createdAt: newestDate?.toISOString() ?? new Date().toISOString(),
+            payload: mdContent,
+        });
     } else {
         const firstParsed = parseMessageData(messages[0]);
         let mdContent = `# ${firstParsed.subject}\n\n`;
@@ -617,6 +632,13 @@ async function processThreadComposio(connectedAccountId: string, threadId: strin
 
         fs.writeFileSync(path.join(syncDir, `${cleanFilename(threadId)}.md`), mdContent);
         console.log(`[Gmail] Synced Thread: ${firstParsed.subject} (${threadId})`);
+
+        await writeEventFile({
+            source: 'gmail',
+            type: 'email.synced',
+            createdAt: newestDate?.toISOString() ?? new Date().toISOString(),
+            payload: mdContent,
+        });
     }
 
     if (!newestDate) return null;
