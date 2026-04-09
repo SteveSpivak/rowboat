@@ -1,5 +1,8 @@
 import { app, BrowserWindow, desktopCapturer, protocol, net, shell, session } from "electron";
 import path from "node:path";
+import fs from "node:fs";
+import netMod from "node:net";
+import { spawn, ChildProcess } from "node:child_process";
 import {
   setupIpcHandlers,
   startRunsWatcher,
@@ -32,6 +35,71 @@ const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const CLI_BRIDGE_PORT = Number(process.env.ROWBOAT_CLI_BRIDGE_PORT || "8765");
+const CLI_BRIDGE_HOST = process.env.ROWBOAT_CLI_BRIDGE_HOST || "127.0.0.1";
+const CLI_BRIDGE_AUTOSTART = process.env.ROWBOAT_CLI_BRIDGE_AUTOSTART !== "false";
+const CLI_BRIDGE_PATH_ENV = process.env.ROWBOAT_CLI_BRIDGE_PATH;
+const CLI_BRIDGE_NODE = process.env.ROWBOAT_NODE_BINARY || process.env.NODE_BINARY || "node";
+let cliBridgeProcess: ChildProcess | null = null;
+
+function resolveCliBridgePath(): string | null {
+  if (CLI_BRIDGE_PATH_ENV && fs.existsSync(CLI_BRIDGE_PATH_ENV)) {
+    return CLI_BRIDGE_PATH_ENV;
+  }
+
+  const home = process.env.HOME || "";
+  const candidates = [
+    path.join(home, "agent-workspace", "rowboatlabs", "cli-model-bridge.mjs"),
+    path.resolve(__dirname, "../../../../..", "cli-model-bridge.mjs"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+function isPortListening(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new netMod.Socket();
+    const done = (result: boolean) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(500);
+    socket.once("error", () => done(false));
+    socket.once("timeout", () => done(false));
+    socket.connect(port, host, () => done(true));
+  });
+}
+
+async function ensureCliBridge() {
+  if (!CLI_BRIDGE_AUTOSTART) return;
+  if (await isPortListening(CLI_BRIDGE_HOST, CLI_BRIDGE_PORT)) return;
+
+  const bridgePath = resolveCliBridgePath();
+  if (!bridgePath) {
+    console.warn("CLI bridge autostart skipped: cli-model-bridge.mjs not found.");
+    return;
+  }
+
+  try {
+    cliBridgeProcess = spawn(CLI_BRIDGE_NODE, [bridgePath], {
+      env: {
+        ...process.env,
+        ROWBOAT_CLI_BRIDGE_PORT: String(CLI_BRIDGE_PORT),
+      },
+      stdio: "ignore",
+    });
+    cliBridgeProcess.on("error", (error) => {
+      console.warn("CLI bridge failed to start:", error);
+    });
+  } catch (error) {
+    console.warn("CLI bridge autostart error:", error);
+  }
+}
 
 // run this as early in the main process as possible
 if (started) app.quit();
@@ -206,6 +274,8 @@ app.whenReady().then(async () => {
 
   setupIpcHandlers();
 
+  await ensureCliBridge();
+
   createWindow();
 
   // Start workspace watcher as a main-process service
@@ -272,4 +342,8 @@ app.on("before-quit", () => {
   stopWorkspaceWatcher();
   stopRunsWatcher();
   stopServicesWatcher();
+  if (cliBridgeProcess && !cliBridgeProcess.killed) {
+    cliBridgeProcess.kill();
+    cliBridgeProcess = null;
+  }
 });
