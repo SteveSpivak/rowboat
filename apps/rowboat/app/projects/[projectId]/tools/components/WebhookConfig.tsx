@@ -90,8 +90,8 @@ export function WebhookConfig({ projectId }: { projectId: string }) {
             <div className="space-y-6">
                 <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
                     <div className="px-6 pt-4">
-                        <h2 className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Webhook URL</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">In workflow editor, tool calls will be posted to this URL, unless they are mocked.</p>
+                        <h2 className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Webhook destination</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Tool calls post to this URL unless they are mocked. Point it at n8n or another local orchestrator when you want a webhook-based tool path.</p>
                     </div>
                     <div className="px-6 pb-6">
                         <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -108,8 +108,8 @@ export function WebhookConfig({ projectId }: { projectId: string }) {
         <div className="space-y-6">
             <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
                 <div className="px-6 pt-4">
-                    <h2 className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Webhook URL</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Tool calls will be posted to this URL, unless they are mocked.</p>
+                    <h2 className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Webhook destination</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Tool calls will be posted to this URL unless they are mocked. Use it to route requests into n8n or another local orchestrator.</p>
                 </div>
                 <div className="px-6 pb-6">
                     <div className="space-y-4">

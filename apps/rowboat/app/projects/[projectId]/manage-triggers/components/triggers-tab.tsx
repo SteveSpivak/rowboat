@@ -287,7 +287,7 @@ export function TriggersTab({ projectId }: { projectId: string }) {
               onClick={handleCreateNew}
               className="whitespace-nowrap"
             >
-              New External Trigger
+              New Connected App Trigger
             </Button>
           }
         >
@@ -296,10 +296,10 @@ export function TriggersTab({ projectId }: { projectId: string }) {
               <div className="text-center py-12">
                 <ZapIcon className="w-16 h-16 mx-auto text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  No external triggers yet
+                  No connected app triggers yet
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-6">
-                  Create your first external trigger to listen for events from your connected apps.
+                  Create your first connected app trigger to listen for events from your connected apps.
                 </p>
               </div>
             </div>
@@ -322,7 +322,7 @@ export function TriggersTab({ projectId }: { projectId: string }) {
             onClick={handleCreateNew}
             className="whitespace-nowrap"
           >
-            New External Trigger
+            New Connected App Trigger
           </Button>
         }
       >
@@ -472,10 +472,10 @@ export function TriggersTab({ projectId }: { projectId: string }) {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Select a Toolkit to Create Trigger
+                Select a connected app
               </h3>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Note: Triggers run only on the published version of your workflow. Publish any changes to make them active.
+                Connected app triggers run only on the published version of your workflow. Publish any changes to make them active.
               </p>
             </div>
             {triggers.length > 0 && (
@@ -517,7 +517,7 @@ export function TriggersTab({ projectId }: { projectId: string }) {
     <Panel
       title={
         <div className="text-base font-normal text-gray-900 dark:text-gray-100">
-          External triggers are disabled
+          Connected app triggers are disabled
         </div>
       }
     >

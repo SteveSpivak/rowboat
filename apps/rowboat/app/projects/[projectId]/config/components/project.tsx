@@ -14,12 +14,13 @@ import { sectionHeaderStyles, sectionDescriptionStyles } from './shared-styles';
 import { clsx } from "clsx";
 import { InputField } from "../../../../lib/components/input-field";
 import { ComposioConnectedAccount } from "@/src/entities/models/project";
-import { getToolkit, listComposioTriggerDeployments, deleteComposioTriggerDeployment } from "../../../../actions/composio.actions";
+import { getComposioWorkspaceStatus, getToolkit, listComposioTriggerDeployments, deleteComposioTriggerDeployment } from "../../../../actions/composio.actions";
 import { deleteConnectedAccount } from "../../../../actions/composio.actions";
 import { PictureImg } from "@/components/ui/picture-img";
 import { UnlinkIcon, AlertTriangle, Trash2 } from "lucide-react";
 import { ProjectWideChangeConfirmationModal } from "@/components/common/project-wide-change-confirmation-modal";
 import { Workflow } from "../../../../lib/types/workflow_types";
+import { USE_COMPOSIO_TOOLS } from "@/app/lib/feature_flags";
 
 export function Section({
     title,
@@ -432,6 +433,7 @@ function DisconnectToolkitsSection({ projectId, onProjectConfigUpdated }: {
     const [disconnectingToolkit, setDisconnectingToolkit] = useState<string | null>(null);
     const [showDisconnectModal, setShowDisconnectModal] = useState(false);
     const [selectedToolkit, setSelectedToolkit] = useState<ConnectedToolkit | null>(null);
+    const [composioConfigured, setComposioConfigured] = useState<boolean | null>(null);
 
     const loadConnectedToolkits = useCallback(async () => {
         setLoading(true);
@@ -486,9 +488,20 @@ function DisconnectToolkitsSection({ projectId, onProjectConfigUpdated }: {
         }
     }, [projectId]);
 
+    const loadComposioStatus = useCallback(async () => {
+        try {
+            const status = await getComposioWorkspaceStatus();
+            setComposioConfigured(status.configured);
+        } catch (error) {
+            console.error('Failed to load Composio workspace status:', error);
+            setComposioConfigured(false);
+        }
+    }, []);
+
     useEffect(() => {
+        loadComposioStatus();
         loadConnectedToolkits();
-    }, [loadConnectedToolkits]);
+    }, [loadComposioStatus, loadConnectedToolkits]);
 
     const handleDisconnectClick = (toolkit: ConnectedToolkit) => {
         setSelectedToolkit(toolkit);
@@ -566,10 +579,20 @@ function DisconnectToolkitsSection({ projectId, onProjectConfigUpdated }: {
     return (
         <>
             <Section 
-                title="Composio Toolkits"
-                description="Manage your Composio toolkits. Shows all toolkits added to your project, whether connected or not. Disconnect to remove all tools, triggers, and connections."
+                title="Connected Apps"
+                description="Manage Composio-backed connected apps referenced by this project. Disconnecting removes the related tools, triggers, and connection state."
             >
                 <div className="space-y-4">
+                    {!USE_COMPOSIO_TOOLS && (
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                            This workspace is currently using MCP, webhooks, and CLI-backed flows by default. This section only surfaces any existing Composio-backed app references already attached to the project.
+                        </div>
+                    )}
+                    {USE_COMPOSIO_TOOLS && composioConfigured === false && (
+                        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-100">
+                            Composio is enabled in this build, but <span className="font-mono">COMPOSIO_API_KEY</span> is not configured. Use MCP, webhooks, and local n8n for the local-first path, or add the key to turn on connected-app auth.
+                        </div>
+                    )}
                     {loading ? (
                         <Spinner size="sm" />
                     ) : connectedToolkits.length > 0 ? (
@@ -656,8 +679,8 @@ function DisconnectToolkitsSection({ projectId, onProjectConfigUpdated }: {
                     ) : (
                         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                             <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                            <p className="text-sm">No toolkits found</p>
-                            <p className="text-xs mt-1">Connect toolkits from the workflow editor or triggers to manage them here</p>
+                            <p className="text-sm">No connected apps found</p>
+                            <p className="text-xs mt-1">Add connected apps from the tools modal or connected-app triggers to manage them here.</p>
                         </div>
                     )}
                 </div>

@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { listToolkits } from '@/app/actions/composio.actions';
+import { getComposioWorkspaceStatus, listToolkits } from '@/app/actions/composio.actions';
 import { fetchProject } from '@/app/actions/project.actions';
 import { z } from 'zod';
 import { ZListResponse } from "@/src/application/lib/composio/types";
-import { ZTool } from "@/src/application/lib/composio/types";
 import { ZToolkit } from "@/src/application/lib/composio/types";
 import { Project } from "@/src/entities/models/project";
 import { ToolkitCard } from './ToolkitCard';
@@ -38,6 +36,7 @@ export function SelectComposioToolkit({
 }: SelectComposioToolkitProps) {
   const [toolkits, setToolkits] = useState<ToolkitType[]>([]);
   const [projectConfig, setProjectConfig] = useState<ProjectType | null>(null);
+  const [composioConfigured, setComposioConfigured] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,6 +50,16 @@ export function SelectComposioToolkit({
       setError('Unable to load project configuration.');
     }
   }, [projectId]);
+
+  const loadComposioStatus = useCallback(async () => {
+    try {
+      const status = await getComposioWorkspaceStatus();
+      setComposioConfigured(status.configured);
+    } catch (err: any) {
+      console.error('Error fetching Composio workspace status:', err);
+      setComposioConfigured(false);
+    }
+  }, []);
 
   const loadAllToolkits = useCallback(async () => {
     let cursor: string | null = null;
@@ -91,11 +100,23 @@ export function SelectComposioToolkit({
 
   useEffect(() => {
     loadProjectConfig();
-  }, [loadProjectConfig]);
+    loadComposioStatus();
+  }, [loadProjectConfig, loadComposioStatus]);
 
   useEffect(() => {
+    if (composioConfigured === null) {
+      return;
+    }
+
+    if (!composioConfigured) {
+      setToolkits([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     loadAllToolkits();
-  }, [loadAllToolkits]);
+  }, [composioConfigured, loadAllToolkits]);
 
   // Auto-select toolkit if initialToolkitSlug is provided
   useEffect(() => {
@@ -158,6 +179,29 @@ export function SelectComposioToolkit({
           <RefreshCw className="h-4 w-4 mr-2" />
           Try Again
         </Button>
+      </div>
+    );
+  }
+
+  if (composioConfigured === false) {
+    return (
+      <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-5 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-100">
+        <div className="flex gap-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="space-y-2">
+            <div className="font-medium">
+              Connected apps are not configured in this workspace.
+            </div>
+            <p className="text-xs text-yellow-800 dark:text-yellow-200">
+              Composio is the optional connected-app layer here. Configure <span className="font-mono">COMPOSIO_API_KEY</span> to enable it, or use MCP servers and webhook plus n8n for the local-first path.
+            </p>
+            {filterByTriggers && (
+              <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                Connected app triggers stay unavailable until Composio is configured. Use webhook-triggered flows, scheduled runs, or Codex automations when you want fully local orchestration.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     );
   }

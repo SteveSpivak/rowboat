@@ -22,6 +22,7 @@ import { ISyncConnectedAccountController } from "@/src/interface-adapters/contro
 import { IListComposioToolkitsController } from "@/src/interface-adapters/controllers/projects/list-composio-toolkits.controller";
 import { IGetComposioToolkitController } from "@/src/interface-adapters/controllers/projects/get-composio-toolkit.controller";
 import { IListComposioToolsController } from "@/src/interface-adapters/controllers/projects/list-composio-tools.controller";
+import { isComposioConfigured } from "@/src/application/lib/composio/composio";
 
 const createComposioTriggerDeploymentController = container.resolve<ICreateComposioTriggerDeploymentController>("createComposioTriggerDeploymentController");
 const listComposioTriggerDeploymentsController = container.resolve<IListComposioTriggerDeploymentsController>("listComposioTriggerDeploymentsController");
@@ -193,4 +194,12 @@ export async function fetchComposioTriggerDeployment(request: { deploymentId: st
         userId: user.id,
         deploymentId: request.deploymentId,
     });
+}
+
+export async function getComposioWorkspaceStatus() {
+    await authCheck();
+
+    return {
+        configured: isComposioConfigured(),
+    };
 }

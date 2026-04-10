@@ -132,7 +132,7 @@ export function CustomMcpServers({ tools: workflowTools, onAddTool }: CustomMcpS
             <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <p className="text-sm text-blue-700 dark:text-blue-300">
-            Add your own MCP servers here. Enter the server details and select tools to add to your workflow.
+            Add remote MCP servers here. Rowboat currently supports HTTP and SSE MCP endpoints in this workspace. Use MCP for shared tool catalogs, and webhook plus n8n when you want a local multi-app router.
           </p>
         </div>
       </div>
@@ -152,7 +152,7 @@ export function CustomMcpServers({ tools: workflowTools, onAddTool }: CustomMcpS
             type="text"
             value={addUrl}
             onChange={e => setAddUrl(e.target.value)}
-            placeholder="Server URL"
+            placeholder="HTTP or SSE URL"
             required
             className="flex-1"
           />
@@ -178,7 +178,7 @@ export function CustomMcpServers({ tools: workflowTools, onAddTool }: CustomMcpS
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Object.entries(servers).length === 0 ? (
-            <div className="col-span-full text-gray-500 text-sm">No custom MCP servers added yet.</div>
+            <div className="col-span-full text-gray-500 text-sm">No MCP servers added yet.</div>
           ) : (
             Object.entries(servers).map(([name, { serverUrl }]) => (
               <ServerCard
