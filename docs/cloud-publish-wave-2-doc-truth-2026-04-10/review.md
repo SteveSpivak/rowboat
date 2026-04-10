@@ -7,6 +7,10 @@
 - This dependency is required because the corrected docs now truthfully refer to `scripts/token-audit.js`.
 - A clean publisher worktree was created for:
   - `codex/publisher/rowboat-cloud-publish-wave-2-doc-truth-2026-04-10`
+- Published branch:
+  - `https://github.com/SteveSpivak/rowboat/tree/codex/publisher/rowboat-cloud-publish-wave-2-doc-truth-2026-04-10`
+- Linked issue comment:
+  - `https://github.com/SteveSpivak/rowboat/issues/6#issuecomment-4221911680`
 
 ## Files Included
 
