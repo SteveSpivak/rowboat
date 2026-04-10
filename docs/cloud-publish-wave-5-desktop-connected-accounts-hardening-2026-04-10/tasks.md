@@ -12,8 +12,8 @@
 - [x] 1.4 Run `node scripts/token-audit.js`.
   Done condition: the real audit result is captured.
 
-- [ ] 1.5 Commit and push the wave branch to `SteveSpivak/rowboat`.
+- [x] 1.5 Commit and push the wave branch to `SteveSpivak/rowboat`.
   Done condition: the branch exists on the fork.
 
-- [ ] 1.6 Link the published branch back to the relevant GitHub issues.
+- [x] 1.6 Link the published branch back to the relevant GitHub issues.
   Done condition: GitHub issue history records the slice and proof gaps.
