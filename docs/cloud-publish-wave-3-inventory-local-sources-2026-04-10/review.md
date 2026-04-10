@@ -6,6 +6,12 @@
   - `codex/publisher/rowboat-cloud-publish-wave-2-doc-truth-2026-04-10`
 - A clean publish worktree was created for:
   - `codex/publisher/rowboat-cloud-publish-wave-3-inventory-local-sources-2026-04-10`
+- Published branch:
+  - `https://github.com/SteveSpivak/rowboat/tree/codex/publisher/rowboat-cloud-publish-wave-3-inventory-local-sources-2026-04-10`
+- Linked issue comments:
+  - `https://github.com/SteveSpivak/rowboat/issues/3#issuecomment-4221995128`
+  - `https://github.com/SteveSpivak/rowboat/issues/4#issuecomment-4221995149`
+  - `https://github.com/SteveSpivak/rowboat/issues/6#issuecomment-4221995138`
 
 ## Included Surfaces
 
