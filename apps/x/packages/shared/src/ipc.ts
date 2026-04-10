@@ -14,6 +14,18 @@ import { ZListToolkitsResponse } from './composio.js';
 // Runtime Validation Schemas (Single Source of Truth)
 // ============================================================================
 
+const settingsTabSchema = z.enum([
+  'account',
+  'connected-accounts',
+  'models',
+  'knowledge-sources',
+  'mcp',
+  'security',
+  'appearance',
+  'tools',
+  'note-tagging',
+]);
+
 const ipcSchemas = {
   'app:getVersions': {
     req: z.null(),
@@ -22,6 +34,12 @@ const ipcSchemas = {
       node: z.string(),
       electron: z.string(),
     }),
+  },
+  'app:openSettings': {
+    req: z.object({
+      tab: settingsTabSchema.optional(),
+    }),
+    res: z.null(),
   },
   'workspace:getRoot': {
     req: z.null(),

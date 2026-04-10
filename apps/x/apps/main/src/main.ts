@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, protocol, net, shell, session } from "electron";
+import { app, BrowserWindow, Menu, desktopCapturer, protocol, net, shell, session } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import netMod from "node:net";
@@ -42,6 +42,16 @@ const CLI_BRIDGE_AUTOSTART = process.env.ROWBOAT_CLI_BRIDGE_AUTOSTART !== "false
 const CLI_BRIDGE_PATH_ENV = process.env.ROWBOAT_CLI_BRIDGE_PATH;
 const CLI_BRIDGE_NODE = process.env.ROWBOAT_NODE_BINARY || process.env.NODE_BINARY || "node";
 let cliBridgeProcess: ChildProcess | null = null;
+type SettingsMenuTab =
+  | "account"
+  | "connected-accounts"
+  | "models"
+  | "knowledge-sources"
+  | "mcp"
+  | "security"
+  | "appearance"
+  | "tools"
+  | "note-tagging";
 
 function resolveCliBridgePath(): string | null {
   if (CLI_BRIDGE_PATH_ENV && fs.existsSync(CLI_BRIDGE_PATH_ENV)) {
@@ -171,6 +181,90 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+function sendOpenSettingsToWindow(win: BrowserWindow, tab?: SettingsMenuTab) {
+  const payload = tab ? { tab } : {};
+  const dispatch = () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send("app:openSettings", payload);
+    }
+  };
+
+  if (win.webContents.isLoadingMainFrame()) {
+    win.webContents.once("did-finish-load", dispatch);
+    return;
+  }
+
+  dispatch();
+}
+
+function openSettingsFromMenu(tab?: SettingsMenuTab) {
+  const existingWindow =
+    BrowserWindow.getFocusedWindow() ??
+    BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+  const win = existingWindow ?? createWindow();
+
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  win.focus();
+  sendOpenSettingsToWindow(win, tab);
+}
+
+function buildApplicationMenu() {
+  const settingsMenuItem = {
+    label: "Settings…",
+    accelerator: "CommandOrControl+,",
+    click: () => openSettingsFromMenu(),
+  } satisfies Electron.MenuItemConstructorOptions;
+
+  const connectedAccountsMenuItem = {
+    label: "Connected Accounts…",
+    click: () => openSettingsFromMenu("connected-accounts"),
+  } satisfies Electron.MenuItemConstructorOptions;
+
+  const template: Electron.MenuItemConstructorOptions[] =
+    process.platform === "darwin"
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              settingsMenuItem,
+              connectedAccountsMenuItem,
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          },
+          { role: "editMenu" },
+          { role: "viewMenu" },
+          { role: "windowMenu" },
+        ]
+      : [
+          {
+            label: "File",
+            submenu: [
+              settingsMenuItem,
+              connectedAccountsMenuItem,
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          },
+          { role: "editMenu" },
+          { role: "viewMenu" },
+          { role: "windowMenu" },
+        ];
+
+  return Menu.buildFromTemplate(template);
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -237,6 +331,8 @@ function createWindow() {
   } else {
     win.loadURL("http://localhost:5173");
   }
+
+  return win;
 }
 
 app.whenReady().then(async () => {
@@ -277,6 +373,7 @@ app.whenReady().then(async () => {
   await ensureCliBridge();
 
   createWindow();
+  Menu.setApplicationMenu(buildApplicationMenu());
 
   // Start workspace watcher as a main-process service
   // Watcher runs independently and catches ALL filesystem changes:

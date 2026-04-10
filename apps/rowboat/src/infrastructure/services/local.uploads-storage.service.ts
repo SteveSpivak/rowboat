@@ -1,7 +1,7 @@
 import { IDataSourceDocsRepository } from "@/src/application/repositories/data-source-docs.repository.interface";
 import { IUploadsStorageService } from "@/src/application/services/uploads-storage.service.interface";
+import { resolveStoredLocalFilePath } from "@/src/application/services/local-file-path";
 import fs from "fs";
-import path from "path";
 import { NotFoundError } from "@/src/entities/errors/common";
 
 const UPLOADS_DIR = process.env.RAG_UPLOADS_DIR || '/uploads';
@@ -33,7 +33,6 @@ export class LocalUploadsStorageService implements IUploadsStorageService {
         if (file.data.type !== 'file_local') {
             throw new NotFoundError('File is not a local file');
         }
-        const filePath = file.data.path.split('/api/uploads/')[1];
-        return fs.readFileSync(path.join(UPLOADS_DIR, filePath));
+        return fs.readFileSync(resolveStoredLocalFilePath(file.data.path, UPLOADS_DIR));
     }
 }

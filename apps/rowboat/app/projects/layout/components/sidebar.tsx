@@ -19,7 +19,9 @@ import {
   MessageSquareIcon,
   LogsIcon,
   Clock,
-  ZapIcon
+  ZapIcon,
+  Plug,
+  BookOpen
 } from "lucide-react";
 import { fetchProject } from "@/app/actions/project.actions";
 import { createProjectWithOptions } from "../../lib/project-creation-utils";
@@ -118,6 +120,11 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
       href: 'jobs',
       label: 'Jobs',
       icon: LogsIcon,
+    },
+    {
+      href: 'inventory',
+      label: 'Inventory',
+      icon: BookOpen,
     },
     {
       href: 'config',
@@ -271,6 +278,8 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
                           ? 'settings'
                           : item.href === 'sources'
                             ? 'entity-data-sources'
+                            : item.href === 'inventory'
+                              ? 'inventory'
                             : item.href === 'manage-triggers'
                               ? 'triggers'
                               : item.href === 'jobs'
@@ -311,6 +320,8 @@ export default function Sidebar({ projectId, useAuth, collapsed = false, onToggl
                         ? 'settings'
                         : item.href === 'sources'
                           ? 'entity-data-sources'
+                          : item.href === 'inventory'
+                            ? 'inventory'
                           : item.href === 'manage-triggers'
                             ? 'triggers'
                             : item.href === 'jobs'

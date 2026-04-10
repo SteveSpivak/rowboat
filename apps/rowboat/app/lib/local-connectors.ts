@@ -13,6 +13,8 @@ export type LocalConnectorModel = {
     label: string;
 };
 
+export const DEFAULT_LOCAL_CONNECTOR_BASE_URL = 'http://127.0.0.1:8765/v1';
+
 export const LOCAL_CONNECTORS: LocalConnectorInfo[] = [
     {
         key: 'codex',
@@ -106,9 +108,13 @@ export function mapBridgeModelsToConnectorModels(
     });
 }
 
+export function resolveLocalConnectorBaseUrl(): string {
+    const baseUrl = process.env.PROVIDER_BASE_URL || DEFAULT_LOCAL_CONNECTOR_BASE_URL;
+    return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+}
+
 export async function fetchLocalConnectorModels(): Promise<LocalConnectorModel[]> {
-    const baseUrl = process.env.PROVIDER_BASE_URL || 'http://127.0.0.1:8766/v1';
-    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const normalizedBaseUrl = resolveLocalConnectorBaseUrl();
 
     try {
         const response = await fetch(`${normalizedBaseUrl}/models`, {

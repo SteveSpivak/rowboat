@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { container } from '@/di/container';
 import { IDataSourceDocsRepository } from '@/src/application/repositories/data-source-docs.repository.interface';
+import { resolveStoredLocalFilePath } from '@/src/application/services/local-file-path';
 
 const UPLOADS_DIR = process.env.RAG_UPLOADS_DIR || '/uploads';
 
@@ -50,12 +51,11 @@ export async function GET(request: NextRequest, props: { params: Promise<{ fileI
     if (doc.data.type !== 'file_local') {
         return NextResponse.json({ error: 'File is not local' }, { status: 400 });
     }
-    const mimeType = 'application/octet-stream';
+    const mimeType = doc.data.mimeType || 'application/octet-stream';
     const fileName = doc.data.name;
 
     try {
-        // strip uploads dir from path
-        const filePath = path.join(UPLOADS_DIR, doc.data.path.split('/api/uploads/')[1]);
+        const filePath = resolveStoredLocalFilePath(doc.data.path, UPLOADS_DIR);
 
         // Check if file exists
         await fs.access(filePath);

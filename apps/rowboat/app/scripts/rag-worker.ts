@@ -1,4 +1,9 @@
 import '../lib/loadenv';
+import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import FirecrawlApp from '@mendable/firecrawl-js';
 import { z } from 'zod';
@@ -20,6 +25,7 @@ import { IDataSourceDocsRepository } from '@/src/application/repositories/data-s
 import { IUploadsStorageService } from '@/src/application/services/uploads-storage.service.interface';
 import { container } from '@/di/container';
 
+const execFileAsync = promisify(execFile);
 const FILE_PARSING_PROVIDER_API_KEY = process.env.FILE_PARSING_PROVIDER_API_KEY || process.env.OPENAI_API_KEY || '';
 const FILE_PARSING_PROVIDER_BASE_URL = process.env.FILE_PARSING_PROVIDER_BASE_URL || undefined;
 const FILE_PARSING_MODEL = process.env.FILE_PARSING_MODEL || 'gpt-4.1';
@@ -61,6 +67,113 @@ async function retryable<T>(fn: () => Promise<T>, maxAttempts: number = 3): Prom
     }
 }
 
+function decodeXmlEntities(value: string): string {
+    return value
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}
+
+function normalizeExtractedText(value: string): string {
+    return value
+        .replace(/\r/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function xmlToText(value: string): string {
+    const withBreaks = value
+        .replace(/<a:br\s*\/>/g, '\n')
+        .replace(/<\/(?:a:p|si|row|sst|worksheet|sheetData|sheet|t|v)>/g, '\n');
+    const stripped = withBreaks.replace(/<[^>]+>/g, ' ');
+    return normalizeExtractedText(decodeXmlEntities(stripped));
+}
+
+async function withTempFile<T>(fileName: string, fileData: Buffer, fn: (filePath: string) => Promise<T>): Promise<T> {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rowboat-rag-'));
+    const tempPath = path.join(tempDir, `${crypto.randomUUID()}${path.extname(fileName)}`);
+
+    await fs.writeFile(tempPath, fileData);
+
+    try {
+        return await fn(tempPath);
+    } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+}
+
+async function extractZipEntries(tempPath: string, matcher: (entry: string) => boolean): Promise<string> {
+    const { stdout: entryList } = await execFileAsync('/usr/bin/zipinfo', ['-1', tempPath], {
+        maxBuffer: 16 * 1024 * 1024,
+    });
+    const entries = entryList
+        .split('\n')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .filter(matcher);
+
+    if (entries.length === 0) {
+        return '';
+    }
+
+    const { stdout } = await execFileAsync('/usr/bin/unzip', ['-p', tempPath, ...entries], {
+        maxBuffer: 64 * 1024 * 1024,
+    });
+    return stdout;
+}
+
+async function extractFileMarkdownLocally(fileName: string, fileData: Buffer): Promise<string | null> {
+    const extension = path.extname(fileName).toLowerCase();
+
+    if (extension === '.txt' || extension === '.md' || extension === '.csv') {
+        return normalizeExtractedText(fileData.toString('utf8'));
+    }
+
+    if (extension === '.docx') {
+        const stdout = await withTempFile(fileName, fileData, async (tempPath) => {
+            const result = await execFileAsync('/usr/bin/textutil', ['-convert', 'txt', '-stdout', tempPath], {
+                maxBuffer: 64 * 1024 * 1024,
+            });
+            return result.stdout;
+        });
+        const text = normalizeExtractedText(stdout);
+        return text || `Document file ${path.basename(fileName)} did not expose body text during local extraction.`;
+    }
+
+    if (extension === '.pptx') {
+        const xml = await withTempFile(fileName, fileData, async (tempPath) => extractZipEntries(
+            tempPath,
+            (entry) => entry.startsWith('ppt/slides/') && entry.endsWith('.xml'),
+        ));
+        if (!xml) {
+            return '';
+        }
+        const text = xmlToText(xml);
+        return text || `Presentation file ${path.basename(fileName)} did not expose any slide text during local extraction.`;
+    }
+
+    if (extension === '.xlsx') {
+        const xml = await withTempFile(fileName, fileData, async (tempPath) => extractZipEntries(
+            tempPath,
+            (entry) => entry === 'xl/workbook.xml'
+                || entry === 'xl/sharedStrings.xml'
+                || (entry.startsWith('xl/worksheets/') && entry.endsWith('.xml')),
+        ));
+        if (!xml) {
+            return '';
+        }
+        const text = xmlToText(xml);
+        return text || `Spreadsheet file ${path.basename(fileName)} did not expose populated cell text during local extraction.`;
+    }
+
+    return null;
+}
+
 async function runProcessFilePipeline(_logger: PrefixLogger, usageTracker: UsageTracker, job: z.infer<typeof DataSource>, doc: z.infer<typeof DataSourceDoc>) {
     if (doc.data.type !== 'file_local' && doc.data.type !== 'file_s3') {
         throw new Error("Invalid data source type");
@@ -80,36 +193,12 @@ async function runProcessFilePipeline(_logger: PrefixLogger, usageTracker: Usage
         fileData = await s3UploadsStorageService.getFileContents(doc.id);
     }
 
-    let markdown = "";
+    let markdown = await extractFileMarkdownLocally(doc.data.name || doc.name, fileData);
     const extractPrompt = "Extract and return only the text content from this document in markdown format. Exclude any formatting instructions or additional commentary.";
-    if (!USE_GEMINI_FILE_PARSING) {
-        // Use OpenAI to extract text content
-        logger.log("Extracting content using OpenAI");
-        const { text, usage } = await generateText({
-            model: openai(FILE_PARSING_MODEL),
-            system: extractPrompt,
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "file",
-                            data: fileData.toString('base64'),
-                            mimeType: doc.data.mimeType,
-                        }
-                    ]
-                }
-            ],
-        });
-        markdown = text;
-        usageTracker.track({
-            type: "LLM_USAGE",
-            modelName: FILE_PARSING_MODEL,
-            inputTokens: usage.promptTokens,
-            outputTokens: usage.completionTokens,
-            context: "rag.files.llm_usage",
-        });
-    } else {
+
+    if (markdown) {
+        logger.log("Extracting content using local parser");
+    } else if (USE_GEMINI_FILE_PARSING) {
         // Use Gemini to extract text content
         logger.log("Extracting content using Gemini");
         const model = genAI.getGenerativeModel({ model: geminiParsingModel });
@@ -131,6 +220,32 @@ async function runProcessFilePipeline(_logger: PrefixLogger, usageTracker: Usage
             outputTokens: result.response.usageMetadata?.candidatesTokenCount || 0,
             context: "rag.files.llm_usage",
         });
+    } else if (FILE_PARSING_PROVIDER_API_KEY || FILE_PARSING_PROVIDER_BASE_URL) {
+        logger.log("Extracting content using provider text fallback");
+        const { text, usage } = await generateText({
+            model: openai(FILE_PARSING_MODEL),
+            system: extractPrompt,
+            prompt: [
+                'The file bytes could not be parsed locally.',
+                `Filename: ${doc.data.name || doc.name}`,
+                `Mime type: ${doc.data.mimeType}`,
+                'If the content below is not human-readable, reply with exactly: UNSUPPORTED_LOCAL_FILE',
+                '',
+                fileData.toString('utf8'),
+            ].join('\n'),
+        });
+        markdown = text === 'UNSUPPORTED_LOCAL_FILE' ? '' : text;
+        usageTracker.track({
+            type: "LLM_USAGE",
+            modelName: FILE_PARSING_MODEL,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            context: "rag.files.llm_usage",
+        });
+    }
+
+    if (!markdown) {
+        throw new Error(`No local parser is available for ${path.extname(doc.data.name || doc.name).toLowerCase() || 'this file type'}.`);
     }
 
     // split into chunks

@@ -30,6 +30,10 @@ interface ExternalKnowledgeSourcesConfig {
     maxDepth?: number;
     docCandidates?: string[];
   };
+  localFolders?: {
+    enabled?: boolean;
+    roots?: string[];
+  };
 }
 
 interface ExternalSourceState {
@@ -40,8 +44,29 @@ const CONFIG_PATH = path.join(WorkDir, 'config', 'external-knowledge-sources.jso
 const SOURCES_ROOT = 'knowledge/Sources';
 const NEWVAULT_ROOT = `${SOURCES_ROOT}/NewVault`;
 const PROJECTS_ROOT = `${SOURCES_ROOT}/Projects`;
+const FOLDERS_ROOT = `${SOURCES_ROOT}/Folders`;
 const DEFAULT_DOC_CANDIDATES = ['README.md', 'AGENTS.md', 'CLAUDE.md'];
 const CACHE_TTL_MS = 30_000;
+const DEFAULT_EXTERNAL_SOURCES_CONFIG: ExternalKnowledgeSourcesConfig = {
+  newVault: {
+    enabled: true,
+    sourceRoot: '/Users/steve.spivak/NewVault',
+    excludeTopLevel: [],
+  },
+  projectCatalog: {
+    enabled: true,
+    roots: ['/Users/steve.spivak/dev', '/Users/steve.spivak/agent-workspace'],
+    maxDepth: 2,
+    docCandidates: DEFAULT_DOC_CANDIDATES,
+  },
+  localFolders: {
+    enabled: true,
+    roots: [
+      '/Users/steve.spivak/Library/CloudStorage/OneDrive-Cellebrite',
+      '/Users/steve.spivak/Library/CloudStorage/OneDrive-SharedLibraries-Cellebrite',
+    ],
+  },
+};
 
 let cachedState: ExternalSourceState | null = null;
 let cachedAt = 0;
@@ -59,15 +84,38 @@ function safeSlug(value: string): string {
     .slice(0, 120) || 'project';
 }
 
+function normalizeConfig(raw: ExternalKnowledgeSourcesConfig | null): ExternalKnowledgeSourcesConfig {
+  const next = raw ?? {};
+  return {
+    newVault: {
+      enabled: next.newVault?.enabled ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.newVault?.enabled ?? false,
+      sourceRoot: next.newVault?.sourceRoot ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.newVault?.sourceRoot ?? '',
+      excludeTopLevel: next.newVault?.excludeTopLevel ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.newVault?.excludeTopLevel ?? [],
+    },
+    projectCatalog: {
+      enabled: next.projectCatalog?.enabled ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.enabled ?? false,
+      roots: next.projectCatalog?.roots ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.roots ?? [],
+      maxDepth: typeof next.projectCatalog?.maxDepth === 'number'
+        ? next.projectCatalog.maxDepth
+        : DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.maxDepth ?? 2,
+      docCandidates: next.projectCatalog?.docCandidates ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.docCandidates ?? DEFAULT_DOC_CANDIDATES,
+    },
+    localFolders: {
+      enabled: next.localFolders?.enabled ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.localFolders?.enabled ?? false,
+      roots: next.localFolders?.roots ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.localFolders?.roots ?? [],
+    },
+  };
+}
+
 function readConfigSync(): ExternalKnowledgeSourcesConfig {
   if (!fs.existsSync(CONFIG_PATH)) {
-    return {};
+    return normalizeConfig(null);
   }
 
   try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as ExternalKnowledgeSourcesConfig;
+    return normalizeConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as ExternalKnowledgeSourcesConfig);
   } catch {
-    return {};
+    return normalizeConfig(null);
   }
 }
 
@@ -135,6 +183,35 @@ function buildProjectMounts(config: ExternalKnowledgeSourcesConfig['projectCatal
   });
 }
 
+function buildLocalFolderMounts(config: ExternalKnowledgeSourcesConfig['localFolders']): ExternalMount[] {
+  if (!config?.enabled) {
+    return [];
+  }
+
+  const roots = (config.roots ?? [])
+    .filter((root): root is string => typeof root === 'string' && root.length > 0)
+    .filter((root) => fs.existsSync(root));
+  const nameCounts = new Map<string, number>();
+
+  for (const root of roots) {
+    const baseName = path.basename(root);
+    nameCounts.set(baseName, (nameCounts.get(baseName) ?? 0) + 1);
+  }
+
+  return roots.map((root, index) => {
+    const baseName = path.basename(root);
+    const duplicateCount = nameCounts.get(baseName) ?? 0;
+    const displayName = duplicateCount > 1 ? `${baseName}-${index + 1}` : baseName;
+
+    return {
+      virtualPath: `${FOLDERS_ROOT}/${safeSlug(displayName)}`,
+      sourcePath: root,
+      type: 'directory',
+      displayName,
+    };
+  });
+}
+
 function loadStateSync(): ExternalSourceState {
   let configMtimeMs = -1;
   try {
@@ -163,6 +240,7 @@ function loadStateSync(): ExternalSourceState {
   }
 
   mounts.push(...buildProjectMounts(config.projectCatalog));
+  mounts.push(...buildLocalFolderMounts(config.localFolders));
 
   cachedState = { mounts };
   cachedAt = now;
@@ -206,6 +284,9 @@ export function getExternalVirtualEntries(parentRelPath: string): Array<{ name: 
     if (mounts.some((mount) => mount.virtualPath.startsWith(`${PROJECTS_ROOT}/`))) {
       entries.push({ name: 'Projects', path: PROJECTS_ROOT, kind: 'dir' });
     }
+    if (mounts.some((mount) => mount.virtualPath.startsWith(`${FOLDERS_ROOT}/`))) {
+      entries.push({ name: 'Folders', path: FOLDERS_ROOT, kind: 'dir' });
+    }
     return entries;
   }
 
@@ -220,12 +301,23 @@ export function getExternalVirtualEntries(parentRelPath: string): Array<{ name: 
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  if (normalized === FOLDERS_ROOT) {
+    return mounts
+      .filter((mount) => mount.virtualPath.startsWith(`${FOLDERS_ROOT}/`))
+      .map((mount) => ({
+        name: mount.displayName,
+        path: mount.virtualPath,
+        kind: 'dir' as const,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   return [];
 }
 
 export function isExternalVirtualDirectory(relPath: string): boolean {
   const normalized = normalizeRelPath(relPath);
-  if (normalized === SOURCES_ROOT || normalized === PROJECTS_ROOT) {
+  if (normalized === SOURCES_ROOT || normalized === PROJECTS_ROOT || normalized === FOLDERS_ROOT) {
     return hasExternalSources();
   }
   return listExternalMounts().some((mount) => mount.virtualPath === normalized);

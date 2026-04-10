@@ -13,22 +13,30 @@ import { Panel } from "@/components/common/panel-common";
 import { PlusIcon } from "lucide-react";
 import { LOCAL_KNOWLEDGE_ROOTS } from "@/app/lib/local-knowledge-roots";
 import { importLocalKnowledgeRoot } from "@/app/actions/local-knowledge.actions";
+import { importLocalMicrosoftSource, listLocalMicrosoftSources } from "@/app/actions/local-microsoft.actions";
+import { LocalMicrosoftSource } from "@/app/lib/local-microsoft-sources";
 
 export function SourcesList({ projectId }: { projectId: string }) {
     const [sources, setSources] = useState<z.infer<typeof DataSource>[]>([]);
     const [loading, setLoading] = useState(true);
     const [importingRootId, setImportingRootId] = useState<string | null>(null);
+    const [importingMicrosoftSourceId, setImportingMicrosoftSourceId] = useState<string | null>(null);
     const [importMessage, setImportMessage] = useState<string | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
+    const [localMicrosoftSources, setLocalMicrosoftSources] = useState<LocalMicrosoftSource[]>([]);
 
     useEffect(() => {
         let ignore = false;
 
         async function fetchSources() {
             setLoading(true);
-            const sources = await listDataSources(projectId);
+            const [sources, microsoftSources] = await Promise.all([
+                listDataSources(projectId),
+                listLocalMicrosoftSources().catch(() => []),
+            ]);
             if (!ignore) {
                 setSources(sources);
+                setLocalMicrosoftSources(microsoftSources);
                 setLoading(false);
             }
         }
@@ -52,6 +60,22 @@ export function SourcesList({ projectId }: { projectId: string }) {
             setImportError(error instanceof Error ? error.message : 'Import failed');
         } finally {
             setImportingRootId(null);
+        }
+    };
+
+    const handleImportMicrosoftSource = async (source: LocalMicrosoftSource) => {
+        setImportError(null);
+        setImportMessage(null);
+        setImportingMicrosoftSourceId(source.id);
+        try {
+            const result = await importLocalMicrosoftSource({ projectId, sourceId: source.id });
+            setImportMessage(`Imported ${result.docCount} files from ${source.name}.`);
+            const refreshed = await listDataSources(projectId);
+            setSources(refreshed);
+        } catch (error) {
+            setImportError(error instanceof Error ? error.message : 'Import failed');
+        } finally {
+            setImportingMicrosoftSourceId(null);
         }
     };
 
@@ -125,6 +149,57 @@ export function SourcesList({ projectId }: { projectId: string }) {
                                     {importError}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                    <div className="mb-6">
+                        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        Local Microsoft sources
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        OneDrive folders can be imported right now. Outlook and Teams remain desktop-only until local readers are proven.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {localMicrosoftSources.map((source) => {
+                                    const importable = source.importStrategy === 'folder-files';
+                                    return (
+                                        <div key={source.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                {source.name}
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                {source.path}
+                                            </div>
+                                            <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                                                {source.description}
+                                            </div>
+                                            <div className="mt-3">
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    disabled={!importable || !!importingMicrosoftSourceId}
+                                                    onClick={() => handleImportMicrosoftSource(source)}
+                                                >
+                                                    {importingMicrosoftSourceId === source.id
+                                                        ? 'Importing...'
+                                                        : importable
+                                                            ? 'Import files'
+                                                            : 'Desktop only'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {localMicrosoftSources.length === 0 && (
+                                    <div className="rounded-lg border border-dashed border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-500 dark:text-gray-400">
+                                        No local Microsoft app sources were discovered on this machine.
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     {loading && (

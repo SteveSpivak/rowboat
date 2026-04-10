@@ -24,6 +24,7 @@ import { useTheme } from "@/contexts/theme-context"
 import { toast } from "sonner"
 import { AccountSettings } from "@/components/settings/account-settings"
 import { ConnectedAccountsSettings } from "@/components/settings/connected-accounts-settings"
+import { BUILTIN_SKILL_CATALOG } from "@/lib/builtin-skill-catalog"
 
 type ConfigTab = "account" | "connected-accounts" | "models" | "knowledge-sources" | "mcp" | "security" | "appearance" | "tools" | "note-tagging"
 
@@ -83,9 +84,9 @@ const tabs: TabConfig[] = [
   },
   {
     id: "tools",
-    label: "Tools Library",
+    label: "Tools & Skills",
     icon: Wrench,
-    description: "Browse and enable toolkits",
+    description: "Open the runtime-backed inventory for toolkits, skills, and workspace entry points",
   },
   {
     id: "note-tagging",
@@ -799,6 +800,10 @@ type ExternalKnowledgeSourcesConfig = {
     maxDepth?: number
     docCandidates?: string[]
   }
+  localFolders?: {
+    enabled?: boolean
+    roots?: string[]
+  }
 }
 
 const DEFAULT_EXTERNAL_SOURCES_CONFIG: ExternalKnowledgeSourcesConfig = {
@@ -812,6 +817,13 @@ const DEFAULT_EXTERNAL_SOURCES_CONFIG: ExternalKnowledgeSourcesConfig = {
     roots: ["/Users/steve.spivak/dev", "/Users/steve.spivak/agent-workspace"],
     maxDepth: 2,
     docCandidates: ["README.md", "AGENTS.md", "CLAUDE.md"],
+  },
+  localFolders: {
+    enabled: true,
+    roots: [
+      "/Users/steve.spivak/Library/CloudStorage/OneDrive-Cellebrite",
+      "/Users/steve.spivak/Library/CloudStorage/OneDrive-SharedLibraries-Cellebrite",
+    ],
   },
 }
 
@@ -830,6 +842,10 @@ function normalizeSourcesConfig(raw: ExternalKnowledgeSourcesConfig | null): Ext
         ? next.projectCatalog.maxDepth
         : DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.maxDepth ?? 2,
       docCandidates: next.projectCatalog?.docCandidates ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.projectCatalog?.docCandidates ?? [],
+    },
+    localFolders: {
+      enabled: next.localFolders?.enabled ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.localFolders?.enabled ?? false,
+      roots: next.localFolders?.roots ?? DEFAULT_EXTERNAL_SOURCES_CONFIG.localFolders?.roots ?? [],
     },
   }
 }
@@ -889,6 +905,13 @@ function KnowledgeSourcesSettings({ dialogOpen }: { dialogOpen: boolean }) {
     }))
   }
 
+  const updateLocalFolders = (updates: Partial<NonNullable<ExternalKnowledgeSourcesConfig["localFolders"]>>) => {
+    setConfig(prev => ({
+      ...prev,
+      localFolders: { ...prev.localFolders, ...updates },
+    }))
+  }
+
   const updateProjectRoot = (index: number, value: string) => {
     const roots = [...(config.projectCatalog?.roots ?? [])]
     roots[index] = value
@@ -903,6 +926,22 @@ function KnowledgeSourcesSettings({ dialogOpen }: { dialogOpen: boolean }) {
   const removeProjectRoot = (index: number) => {
     const roots = (config.projectCatalog?.roots ?? []).filter((_, i) => i !== index)
     updateProjectCatalog({ roots })
+  }
+
+  const updateLocalFolderRoot = (index: number, value: string) => {
+    const roots = [...(config.localFolders?.roots ?? [])]
+    roots[index] = value
+    updateLocalFolders({ roots })
+  }
+
+  const addLocalFolderRoot = () => {
+    const roots = [...(config.localFolders?.roots ?? []), ""]
+    updateLocalFolders({ roots })
+  }
+
+  const removeLocalFolderRoot = (index: number) => {
+    const roots = (config.localFolders?.roots ?? []).filter((_, i) => i !== index)
+    updateLocalFolders({ roots })
   }
 
   const handleSave = async () => {
@@ -1011,6 +1050,46 @@ function KnowledgeSourcesSettings({ dialogOpen }: { dialogOpen: boolean }) {
             <div className="rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
               {(config.projectCatalog?.docCandidates ?? []).join(", ")}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-medium">Local folders</h4>
+            <p className="text-xs text-muted-foreground">
+              Mount read-only local folders such as synced OneDrive roots under knowledge/Sources/Folders.
+            </p>
+          </div>
+          <Switch
+            checked={config.localFolders?.enabled ?? false}
+            onCheckedChange={(checked) => updateLocalFolders({ enabled: checked })}
+          />
+        </div>
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Roots</span>
+          <div className="space-y-2">
+            {(config.localFolders?.roots ?? []).map((root, index) => (
+              <div key={`${root}-${index}`} className="flex items-center gap-2">
+                <Input
+                  value={root}
+                  onChange={(e) => updateLocalFolderRoot(index, e.target.value)}
+                  placeholder="/Users/steve.spivak/Library/CloudStorage/OneDrive-Cellebrite"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeLocalFolderRoot(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={addLocalFolderRoot}>
+              <Plus className="size-3.5 mr-1" />
+              Add folder
+            </Button>
           </div>
         </div>
       </div>
@@ -1190,30 +1269,70 @@ function ToolsLibrarySettings({ dialogOpen, rowboatConnected }: { dialogOpen: bo
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground space-y-2">
-        <div>
-          <span className="font-medium text-foreground">Local connectors</span> live in Models (Codex CLI, Gemini CLI, Claude CLI, Ollama).
-          MCP servers are configured in the MCP Servers tab.
+      <div className="rounded-lg border bg-muted/40 p-4 space-y-4">
+        <div className="space-y-2 text-xs text-muted-foreground">
+          <div>
+            Desktop is the runtime-backed inventory for <span className="font-medium text-foreground">connectors</span>, <span className="font-medium text-foreground">MCP servers</span>, <span className="font-medium text-foreground">connected accounts</span>, <span className="font-medium text-foreground">knowledge roots</span>, and <span className="font-medium text-foreground">built-in skills</span>.
+          </div>
+          <div>
+            Use the quick links below to jump to the settings tab that actually owns each resource. Background triggers continue to use <span className="font-medium text-foreground">agent-schedule.json</span> or Codex Automations.
+          </div>
         </div>
-        <div>
-          Skills are built-in. See <span className="font-medium">apps/x/packages/core/src/application/assistant/skills</span> to add or extend skills.
-          Triggers can use <span className="font-medium">agent-schedule.json</span> or Codex Automations.
+
+        <div className="grid gap-3 md:grid-cols-2">
+          {[
+            {
+              title: "Models & Connectors",
+              description: "Codex CLI, Gemini CLI, Claude CLI, Ollama, and hosted providers.",
+              tab: "models" as ConfigTab,
+            },
+            {
+              title: "Knowledge Sources",
+              description: "NewVault, project repos, and local folders such as OneDrive roots.",
+              tab: "knowledge-sources" as ConfigTab,
+            },
+            {
+              title: "MCP Servers",
+              description: "Runtime-backed stdio and HTTP MCP server connections.",
+              tab: "mcp" as ConfigTab,
+            },
+            {
+              title: "Connected Accounts",
+              description: "OAuth-backed services and optional cloud toolkit auth state.",
+              tab: "connected-accounts" as ConfigTab,
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border bg-background p-3">
+              <div className="text-sm font-medium text-foreground">{item.title}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{item.description}</div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => window.dispatchEvent(new CustomEvent("rowboat:open-settings", { detail: { tab: item.tab } }))}
+              >
+                Open
+              </Button>
+            </div>
+          ))}
         </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.dispatchEvent(new CustomEvent("rowboat:open-settings", { detail: { tab: "models" } }))}
-          >
-            Open Models
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.dispatchEvent(new CustomEvent("rowboat:open-settings", { detail: { tab: "mcp" } }))}
-          >
-            Open MCP
-          </Button>
+      </div>
+
+      <div className="rounded-lg border bg-muted/20 p-4">
+        <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Built-in skills
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          These skills are part of the desktop assistant runtime. See <span className="font-medium text-foreground">apps/x/packages/core/src/application/assistant/skills</span> to extend them.
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {BUILTIN_SKILL_CATALOG.map((skill) => (
+            <div key={skill.id} className="rounded-lg border bg-background p-3">
+              <div className="text-sm font-medium text-foreground">{skill.title}</div>
+              <div className="mt-1 text-xs font-mono text-muted-foreground">{skill.id}</div>
+              <div className="mt-2 text-xs text-muted-foreground">{skill.summary}</div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1933,15 +2052,27 @@ export function SettingsDialog({ children }: SettingsDialogProps) {
   }, [open, activeTab, isJsonTab, loadConfig])
 
   useEffect(() => {
-    const handleOpenSettings = (event: Event) => {
-      const detail = (event as CustomEvent<{ tab?: ConfigTab }>).detail
+    const openSettings = (tab?: ConfigTab) => {
       setOpen(true)
-      if (detail?.tab) {
-        setActiveTab(detail.tab)
+      if (tab) {
+        setActiveTab(tab)
       }
     }
+
+    const handleOpenSettings = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: ConfigTab }>).detail
+      openSettings(detail?.tab)
+    }
+
+    const cleanup = window.ipc.on("app:openSettings", (detail) => {
+      openSettings(detail.tab)
+    })
+
     window.addEventListener("rowboat:open-settings", handleOpenSettings as EventListener)
-    return () => window.removeEventListener("rowboat:open-settings", handleOpenSettings as EventListener)
+    return () => {
+      cleanup()
+      window.removeEventListener("rowboat:open-settings", handleOpenSettings as EventListener)
+    }
   }, [])
 
   const handleTabChange = (tab: ConfigTab) => {
