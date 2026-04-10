@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, Mic, Mail, Calendar } from "lucide-react"
+import { Loader2, Mic, Mail, Calendar, MessageSquare, HardDrive } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { GoogleClientIdModal } from "@/components/google-client-id-modal"
@@ -95,6 +95,66 @@ export function ConnectedAccountsSettings({ dialogOpen }: ConnectedAccountsSetti
     )
   }
 
+  const renderComposioProvider = (
+    toolkitSlug: keyof typeof c.composioStates,
+    displayName: string,
+    icon: React.ReactNode,
+    description: string
+  ) => {
+    const state = c.composioStates[toolkitSlug]
+
+    return (
+      <div
+        key={toolkitSlug}
+        className="flex items-center justify-between gap-3 rounded-lg px-4 py-3 hover:bg-accent/50 transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-muted">
+            {icon}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-medium truncate">{displayName}</span>
+            {state.isLoading ? (
+              <span className="text-xs text-muted-foreground">Checking...</span>
+            ) : state.isConnected ? (
+              <span className="text-xs text-emerald-600">Connected</span>
+            ) : (
+              <span className="text-xs text-muted-foreground truncate">{description}</span>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0">
+          {state.isLoading ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          ) : state.isConnected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => c.handleDisconnectComposio(toolkitSlug)}
+              className="h-7 px-3 text-xs"
+            >
+              Disconnect
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => c.handleConnectComposio(toolkitSlug)}
+              disabled={state.isConnecting}
+              className="h-7 px-3 text-xs"
+            >
+              {state.isConnecting ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                "Connect"
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (c.providersLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -121,7 +181,7 @@ export function ConnectedAccountsSettings({ dialogOpen }: ConnectedAccountsSetti
         open={c.composioApiKeyOpen}
         onOpenChange={c.setComposioApiKeyOpen}
         onSubmit={c.handleComposioApiKeySubmit}
-        isSubmitting={c.gmailConnecting}
+        isSubmitting={c.composioStates[c.composioApiKeyTarget]?.isConnecting ?? false}
       />
 
       <div className="space-y-1">
@@ -232,6 +292,34 @@ export function ConnectedAccountsSettings({ dialogOpen }: ConnectedAccountsSetti
             <Separator className="my-3" />
           </>
         )}
+
+        <div className="px-4 py-2">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Microsoft Cloud Connectors
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Optional Composio-backed cloud actions for Outlook, Teams, and OneDrive. For local Microsoft folders and desktop stores, use Knowledge Sources instead.
+          </p>
+        </div>
+        {renderComposioProvider(
+          "microsoft_outlook",
+          "Microsoft Outlook",
+          <Mail className="size-4" />,
+          "Cloud actions for Outlook mail workflows"
+        )}
+        {renderComposioProvider(
+          "microsoft_teams",
+          "Microsoft Teams",
+          <MessageSquare className="size-4" />,
+          "Cloud actions for Teams messages and channels"
+        )}
+        {renderComposioProvider(
+          "onedrive",
+          "OneDrive",
+          <HardDrive className="size-4" />,
+          "Cloud actions for OneDrive files and documents"
+        )}
+        <Separator className="my-3" />
 
         {/* Meeting Notes Section */}
         {c.providers.includes('fireflies-ai') && (

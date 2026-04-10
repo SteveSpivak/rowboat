@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { getGoogleClientId, setGoogleClientId, clearGoogleClientId } from "@/lib/google-client-id-store"
+import { COMPOSIO_DISPLAY_NAMES } from "@x/shared/src/composio.js"
 import { toast } from "sonner"
 
 export interface ProviderState {
@@ -10,6 +11,52 @@ export interface ProviderState {
 
 export interface ProviderStatus {
   error?: string
+}
+
+type ComposioToolkitSlug =
+  | "gmail"
+  | "googlecalendar"
+  | "microsoft_outlook"
+  | "microsoft_teams"
+  | "onedrive"
+
+const ALL_COMPOSIO_TOOLKITS: ComposioToolkitSlug[] = [
+  "gmail",
+  "googlecalendar",
+  "microsoft_outlook",
+  "microsoft_teams",
+  "onedrive",
+]
+
+const MICROSOFT_COMPOSIO_TOOLKITS: ComposioToolkitSlug[] = [
+  "microsoft_outlook",
+  "microsoft_teams",
+  "onedrive",
+]
+
+function createInitialComposioStates(): Record<ComposioToolkitSlug, ProviderState> {
+  return {
+    gmail: { isConnected: false, isLoading: true, isConnecting: false },
+    googlecalendar: { isConnected: false, isLoading: true, isConnecting: false },
+    microsoft_outlook: { isConnected: false, isLoading: true, isConnecting: false },
+    microsoft_teams: { isConnected: false, isLoading: true, isConnecting: false },
+    onedrive: { isConnected: false, isLoading: true, isConnecting: false },
+  }
+}
+
+function getComposioDisplayName(toolkitSlug: ComposioToolkitSlug) {
+  return COMPOSIO_DISPLAY_NAMES[toolkitSlug] || toolkitSlug
+}
+
+function getComposioSuccessDescription(toolkitSlug: ComposioToolkitSlug) {
+  switch (toolkitSlug) {
+    case "gmail":
+      return "Syncing your emails in the background. This may take a few minutes before changes appear."
+    case "googlecalendar":
+      return "Syncing your calendar in the background. This may take a few minutes before changes appear."
+    default:
+      return undefined
+  }
 }
 
 export function useConnectors(active: boolean) {
@@ -26,7 +73,7 @@ export function useConnectors(active: boolean) {
 
   // Composio API key state
   const [composioApiKeyOpen, setComposioApiKeyOpen] = useState(false)
-  const [composioApiKeyTarget, setComposioApiKeyTarget] = useState<'slack' | 'gmail'>('gmail')
+  const [composioApiKeyTarget, setComposioApiKeyTarget] = useState<ComposioToolkitSlug>("gmail")
 
   // Slack state
   const [slackEnabled, setSlackEnabled] = useState(false)
@@ -38,17 +85,29 @@ export function useConnectors(active: boolean) {
   const [slackDiscovering, setSlackDiscovering] = useState(false)
   const [slackDiscoverError, setSlackDiscoverError] = useState<string | null>(null)
 
-  // Composio/Gmail state
-  const [useComposioForGoogle, setUseComposioForGoogle] = useState(false)
-  const [gmailConnected, setGmailConnected] = useState(false)
-  const [gmailLoading, setGmailLoading] = useState(true)
-  const [gmailConnecting, setGmailConnecting] = useState(false)
+  // Composio toolkit state
+  const [composioStates, setComposioStates] = useState<Record<ComposioToolkitSlug, ProviderState>>(
+    createInitialComposioStates
+  )
 
-  // Composio/Google Calendar state
+  // Composio/Gmail flags
+  const [useComposioForGoogle, setUseComposioForGoogle] = useState(false)
+
+  // Composio/Google Calendar flags
   const [useComposioForGoogleCalendar, setUseComposioForGoogleCalendar] = useState(false)
-  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false)
-  const [googleCalendarLoading, setGoogleCalendarLoading] = useState(true)
-  const [googleCalendarConnecting, setGoogleCalendarConnecting] = useState(false)
+
+  const setComposioState = useCallback(
+    (toolkitSlug: ComposioToolkitSlug, updates: Partial<ProviderState>) => {
+      setComposioStates(prev => ({
+        ...prev,
+        [toolkitSlug]: {
+          ...prev[toolkitSlug],
+          ...updates,
+        },
+      }))
+    },
+    []
+  )
 
   // Load available providers on mount
   useEffect(() => {
@@ -190,119 +249,81 @@ export function useConnectors(active: boolean) {
     }
   }, [])
 
-  // Gmail (Composio)
-  const refreshGmailStatus = useCallback(async () => {
+  // Composio toolkit connections
+  const refreshComposioStatus = useCallback(async (toolkitSlug: ComposioToolkitSlug) => {
     try {
-      setGmailLoading(true)
-      const result = await window.ipc.invoke('composio:get-connection-status', { toolkitSlug: 'gmail' })
-      setGmailConnected(result.isConnected)
+      setComposioState(toolkitSlug, { isLoading: true })
+      const result = await window.ipc.invoke('composio:get-connection-status', { toolkitSlug })
+      setComposioState(toolkitSlug, {
+        isConnected: result.isConnected,
+        isLoading: false,
+        isConnecting: false,
+      })
     } catch (error) {
-      console.error('Failed to load Gmail status:', error)
-      setGmailConnected(false)
-    } finally {
-      setGmailLoading(false)
+      console.error(`Failed to load ${toolkitSlug} status:`, error)
+      setComposioState(toolkitSlug, {
+        isConnected: false,
+        isLoading: false,
+        isConnecting: false,
+      })
     }
-  }, [])
+  }, [setComposioState])
 
-  const startGmailConnect = useCallback(async () => {
+  const startComposioConnect = useCallback(async (toolkitSlug: ComposioToolkitSlug) => {
+    const displayName = getComposioDisplayName(toolkitSlug)
     try {
-      setGmailConnecting(true)
-      const result = await window.ipc.invoke('composio:initiate-connection', { toolkitSlug: 'gmail' })
+      setComposioState(toolkitSlug, { isConnecting: true, isLoading: false })
+      const result = await window.ipc.invoke('composio:initiate-connection', { toolkitSlug })
       if (!result.success) {
-        toast.error(result.error || 'Failed to connect to Gmail')
-        setGmailConnecting(false)
+        toast.error(result.error || `Failed to connect to ${displayName}`)
+        setComposioState(toolkitSlug, { isConnecting: false, isLoading: false })
       }
     } catch (error) {
-      console.error('Failed to connect to Gmail:', error)
-      toast.error('Failed to connect to Gmail')
-      setGmailConnecting(false)
+      console.error(`Failed to connect to ${toolkitSlug}:`, error)
+      toast.error(`Failed to connect to ${displayName}`)
+      setComposioState(toolkitSlug, { isConnecting: false, isLoading: false })
     }
-  }, [])
+  }, [setComposioState])
 
-  const handleConnectGmail = useCallback(async () => {
+  const handleConnectComposio = useCallback(async (toolkitSlug: ComposioToolkitSlug) => {
     const configResult = await window.ipc.invoke('composio:is-configured', null)
     if (!configResult.configured) {
-      setComposioApiKeyTarget('gmail')
+      setComposioApiKeyTarget(toolkitSlug)
       setComposioApiKeyOpen(true)
       return
     }
-    await startGmailConnect()
-  }, [startGmailConnect])
+    await startComposioConnect(toolkitSlug)
+  }, [startComposioConnect])
 
-  const handleDisconnectGmail = useCallback(async () => {
+  const handleDisconnectComposio = useCallback(async (toolkitSlug: ComposioToolkitSlug) => {
+    const displayName = getComposioDisplayName(toolkitSlug)
     try {
-      setGmailLoading(true)
-      const result = await window.ipc.invoke('composio:disconnect', { toolkitSlug: 'gmail' })
+      setComposioState(toolkitSlug, { isLoading: true })
+      const result = await window.ipc.invoke('composio:disconnect', { toolkitSlug })
       if (result.success) {
-        setGmailConnected(false)
-        toast.success('Disconnected from Gmail')
+        setComposioState(toolkitSlug, {
+          isConnected: false,
+          isLoading: false,
+          isConnecting: false,
+        })
+        toast.success(`Disconnected from ${displayName}`)
       } else {
-        toast.error('Failed to disconnect from Gmail')
+        toast.error(`Failed to disconnect from ${displayName}`)
+        setComposioState(toolkitSlug, { isLoading: false })
       }
     } catch (error) {
-      console.error('Failed to disconnect from Gmail:', error)
-      toast.error('Failed to disconnect from Gmail')
-    } finally {
-      setGmailLoading(false)
+      console.error(`Failed to disconnect from ${toolkitSlug}:`, error)
+      toast.error(`Failed to disconnect from ${displayName}`)
+      setComposioState(toolkitSlug, { isLoading: false })
     }
-  }, [])
+  }, [setComposioState])
 
-  // Google Calendar (Composio)
-  const refreshGoogleCalendarStatus = useCallback(async () => {
-    try {
-      setGoogleCalendarLoading(true)
-      const result = await window.ipc.invoke('composio:get-connection-status', { toolkitSlug: 'googlecalendar' })
-      setGoogleCalendarConnected(result.isConnected)
-    } catch (error) {
-      console.error('Failed to load Google Calendar status:', error)
-      setGoogleCalendarConnected(false)
-    } finally {
-      setGoogleCalendarLoading(false)
-    }
-  }, [])
-
-  const startGoogleCalendarConnect = useCallback(async () => {
-    try {
-      setGoogleCalendarConnecting(true)
-      const result = await window.ipc.invoke('composio:initiate-connection', { toolkitSlug: 'googlecalendar' })
-      if (!result.success) {
-        toast.error(result.error || 'Failed to connect to Google Calendar')
-        setGoogleCalendarConnecting(false)
-      }
-    } catch (error) {
-      console.error('Failed to connect to Google Calendar:', error)
-      toast.error('Failed to connect to Google Calendar')
-      setGoogleCalendarConnecting(false)
-    }
-  }, [])
-
-  const handleConnectGoogleCalendar = useCallback(async () => {
-    const configResult = await window.ipc.invoke('composio:is-configured', null)
-    if (!configResult.configured) {
-      setComposioApiKeyTarget('gmail')
-      setComposioApiKeyOpen(true)
-      return
-    }
-    await startGoogleCalendarConnect()
-  }, [startGoogleCalendarConnect])
-
-  const handleDisconnectGoogleCalendar = useCallback(async () => {
-    try {
-      setGoogleCalendarLoading(true)
-      const result = await window.ipc.invoke('composio:disconnect', { toolkitSlug: 'googlecalendar' })
-      if (result.success) {
-        setGoogleCalendarConnected(false)
-        toast.success('Disconnected from Google Calendar')
-      } else {
-        toast.error('Failed to disconnect from Google Calendar')
-      }
-    } catch (error) {
-      console.error('Failed to disconnect from Google Calendar:', error)
-      toast.error('Failed to disconnect from Google Calendar')
-    } finally {
-      setGoogleCalendarLoading(false)
-    }
-  }, [])
+  const refreshGmailStatus = useCallback(() => refreshComposioStatus('gmail'), [refreshComposioStatus])
+  const refreshGoogleCalendarStatus = useCallback(() => refreshComposioStatus('googlecalendar'), [refreshComposioStatus])
+  const handleConnectGmail = useCallback(() => handleConnectComposio('gmail'), [handleConnectComposio])
+  const handleDisconnectGmail = useCallback(() => handleDisconnectComposio('gmail'), [handleDisconnectComposio])
+  const handleConnectGoogleCalendar = useCallback(() => handleConnectComposio('googlecalendar'), [handleConnectComposio])
+  const handleDisconnectGoogleCalendar = useCallback(() => handleDisconnectComposio('googlecalendar'), [handleDisconnectComposio])
 
   // Composio API key
   const handleComposioApiKeySubmit = useCallback(async (apiKey: string) => {
@@ -310,12 +331,12 @@ export function useConnectors(active: boolean) {
       await window.ipc.invoke('composio:set-api-key', { apiKey })
       setComposioApiKeyOpen(false)
       toast.success('Composio API key saved')
-      await startGmailConnect()
+      await startComposioConnect(composioApiKeyTarget)
     } catch (error) {
       console.error('Failed to save Composio API key:', error)
       toast.error('Failed to save API key')
     }
-  }, [startGmailConnect])
+  }, [composioApiKeyTarget, startComposioConnect])
 
   // OAuth connect/disconnect
   const startConnect = useCallback(async (provider: string, clientId?: string) => {
@@ -419,6 +440,10 @@ export function useConnectors(active: boolean) {
       refreshGoogleCalendarStatus()
     }
 
+    for (const toolkitSlug of MICROSOFT_COMPOSIO_TOOLKITS) {
+      refreshComposioStatus(toolkitSlug)
+    }
+
     if (providers.length === 0) return
 
     const newStates: Record<string, ProviderState> = {}
@@ -457,7 +482,16 @@ export function useConnectors(active: boolean) {
     }
 
     setProviderStates(newStates)
-  }, [providers, refreshGranolaConfig, refreshSlackConfig, refreshGmailStatus, useComposioForGoogle, refreshGoogleCalendarStatus, useComposioForGoogleCalendar])
+  }, [
+    providers,
+    refreshGranolaConfig,
+    refreshSlackConfig,
+    refreshGmailStatus,
+    useComposioForGoogle,
+    refreshGoogleCalendarStatus,
+    useComposioForGoogleCalendar,
+    refreshComposioStatus,
+  ])
 
   // Refresh when active or providers change
   useEffect(() => {
@@ -516,43 +550,49 @@ export function useConnectors(active: boolean) {
   // Listen for Composio events
   useEffect(() => {
     const cleanup = window.ipc.on('composio:didConnect', (event) => {
-      const { toolkitSlug, success, error } = event
-
-      if (toolkitSlug === 'gmail') {
-        setGmailConnected(success)
-        setGmailConnecting(false)
-
-        if (success) {
-          toast.success('Connected to Gmail', {
-            description: 'Syncing your emails in the background. This may take a few minutes before changes appear.',
-            duration: 8000,
-          })
-        } else {
-          toast.error(error || 'Failed to connect to Gmail')
-        }
+      const { toolkitSlug, success, error } = event as {
+        toolkitSlug: string
+        success: boolean
+        error?: string
       }
 
-      if (toolkitSlug === 'googlecalendar') {
-        setGoogleCalendarConnected(success)
-        setGoogleCalendarConnecting(false)
+      if (!ALL_COMPOSIO_TOOLKITS.includes(toolkitSlug as ComposioToolkitSlug)) {
+        return
+      }
 
-        if (success) {
-          toast.success('Connected to Google Calendar', {
-            description: 'Syncing your calendar in the background. This may take a few minutes before changes appear.',
+      const typedToolkitSlug = toolkitSlug as ComposioToolkitSlug
+      const displayName = getComposioDisplayName(typedToolkitSlug)
+
+      setComposioState(typedToolkitSlug, {
+        isConnected: success,
+        isLoading: false,
+        isConnecting: false,
+      })
+
+      if (success) {
+        const description = getComposioSuccessDescription(typedToolkitSlug)
+        if (description) {
+          toast.success(`Connected to ${displayName}`, {
+            description,
             duration: 8000,
           })
         } else {
-          toast.error(error || 'Failed to connect to Google Calendar')
+          toast.success(`Connected to ${displayName}`)
         }
+      } else {
+        toast.error(error || `Failed to connect to ${displayName}`)
       }
     })
 
     return cleanup
-  }, [])
+  }, [setComposioState])
 
   const hasProviderError = Object.values(providerStatus).some(
     (status) => Boolean(status?.error)
   )
+
+  const gmailState = composioStates.gmail
+  const googleCalendarState = composioStates.googlecalendar
 
   return {
     // OAuth providers
@@ -601,19 +641,24 @@ export function useConnectors(active: boolean) {
 
     // Gmail (Composio)
     useComposioForGoogle,
-    gmailConnected,
-    gmailLoading,
-    gmailConnecting,
+    gmailConnected: gmailState.isConnected,
+    gmailLoading: gmailState.isLoading,
+    gmailConnecting: gmailState.isConnecting,
     handleConnectGmail,
     handleDisconnectGmail,
 
     // Google Calendar (Composio)
     useComposioForGoogleCalendar,
-    googleCalendarConnected,
-    googleCalendarLoading,
-    googleCalendarConnecting,
+    googleCalendarConnected: googleCalendarState.isConnected,
+    googleCalendarLoading: googleCalendarState.isLoading,
+    googleCalendarConnecting: googleCalendarState.isConnecting,
     handleConnectGoogleCalendar,
     handleDisconnectGoogleCalendar,
+
+    // Generic Composio toolkit state
+    composioStates,
+    handleConnectComposio,
+    handleDisconnectComposio,
 
     // Refresh
     refreshAllStatuses,

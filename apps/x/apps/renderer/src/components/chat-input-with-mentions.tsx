@@ -278,6 +278,11 @@ function ChatInputInner({
       }
       let available = false
       try {
+        const existsResult = await window.ipc.invoke('workspace:exists', { path: 'config/exa-search.json' })
+        if (!existsResult.exists) {
+          setSearchAvailable(false)
+          return
+        }
         const raw = await window.ipc.invoke('workspace:readFile', { path: 'config/exa-search.json' })
         const config = JSON.parse(raw.data)
         if (config.apiKey) available = true
